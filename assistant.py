@@ -23,16 +23,23 @@ while True:
     if response.message.tool_calls:
         for call in response.message.tool_calls:
             if call.function.name == "list_files":
+                print("[Tool] Listing sandbox files...", flush=True)
                 result = str(list_files())
             elif call.function.name == "read_file":
                 # Validate the filename supplied by the model before using it.
                 filename = call.function.arguments.get("filename")
                 if isinstance(filename, str):
+                    print(f"[Tool] Reading sandbox file: {filename!r}", flush=True)
                     result = read_file(filename)
                 else:
                     result = "Error: filename must be a string."
             else:
                 result = "Error: unknown tool."
+
+            if result.startswith("Error:"):
+                print("[Tool]", result, flush=True)
+            else:
+                print("[Tool] Finished.", flush=True)
 
             messages.append({
                 "role": "tool",
