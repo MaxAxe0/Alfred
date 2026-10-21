@@ -9,15 +9,24 @@ while True:
     if user_input.strip().lower() == "exit":
         break
 
+    # Remember where this turn starts so a failed turn can be removed.
+    turn_start = len(messages)
     messages.append({"role": "user", "content": user_input})
 
     # Allow several tool steps for one user request, with a fixed limit.
     for step in range(6):
-        response = chat(
-            model="qwen3:8b",
-            messages=messages,
-            tools=[list_files, read_file],
-        )
+        try:
+            print("[Assistant] Thinking... waiting for Ollama.", flush=True)
+            response = chat(
+                model="qwen3:8b",
+                messages=messages,
+                tools=[list_files, read_file],
+            )
+        except ConnectionError:
+            del messages[turn_start:]
+            print("[Assistant] Cannot connect to Ollama. Open Ollama and try again.")
+            print("[Assistant] This turn was removed from history. Any tools already run were not undone.")
+            break
 
         # Keep the full message, including any tool requests.
         messages.append(response.message)
