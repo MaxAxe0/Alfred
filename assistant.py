@@ -11,16 +11,21 @@ while True:
 
     messages.append({"role": "user", "content": user_input})
 
-    response = chat(
-        model="qwen3:8b",
-        messages=messages,
-        tools=[list_files, read_file],
-    )
+    # Allow several tool steps for one user request, with a fixed limit.
+    for step in range(6):
+        response = chat(
+            model="qwen3:8b",
+            messages=messages,
+            tools=[list_files, read_file],
+        )
 
-    # Keep the full message, including any tool requests.
-    messages.append(response.message)
+        # Keep the full message, including any tool requests.
+        messages.append(response.message)
 
-    if response.message.tool_calls:
+        if not response.message.tool_calls:
+            print("Assistant:", response.message.content)
+            break
+
         for call in response.message.tool_calls:
             if call.function.name == "list_files":
                 print("[Tool] Listing sandbox files...", flush=True)
@@ -47,12 +52,5 @@ while True:
                 "content": result,
             })
 
-        # Ask the model to answer using the tool results.
-        response = chat(
-            model="qwen3:8b",
-            messages=messages,
-        )
-
-        messages.append(response.message)
-
-    print("Assistant:", response.message.content)
+    else:
+        print("[Assistant] Stopped after 6 tool rounds. Please narrow your request.")
