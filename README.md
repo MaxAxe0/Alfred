@@ -79,7 +79,7 @@ ollama stop qwen3:8b
 3. If the model requests a supported tool, Python executes it.
 4. Python sends the tool result back to the model for an answer.
 
-Currently, each turn supports one batch of tool calls followed by an answer. Tasks that need several sequential tool decisions may require follow-up prompts.
+Each turn supports up to six sequential tool rounds. Tool activity and a waiting message are displayed in the terminal. If Ollama cannot be reached, the assistant removes the incomplete turn from history and returns to the input prompt.
 
 ## Project files
 
@@ -102,7 +102,7 @@ To disable Ollama's cloud features on Windows:
 
 Quit and reopen Ollama after setting it. See [Ollama's configuration documentation](https://docs.ollama.com/faq#how-do-i-disable-ollamas-cloud-features).
 
-This is an early prototype. The sandbox is an application-level path restriction, not operating-system isolation. File contents are untrusted input and could influence model responses. Large files are not yet limited, and some errors, such as losing the Ollama connection, can stop the program. Use small, non-sensitive test files while developing.
+This is an early prototype. The sandbox is an application-level path restriction, not operating-system isolation. File contents are untrusted input and could influence model responses. Large files are not yet limited, and errors beyond the handled connection failures can still stop the program. Use small, non-sensitive test files while developing.
 
 The assistant cannot currently create or modify files, control applications, send email, or upload to GitHub. Its conversational offers do not add capabilities beyond the implemented tools.
 
