@@ -31,7 +31,7 @@ class RequestRecoveryTests(unittest.TestCase):
             # Copy now: the assistant changes the history list afterward.
             snapshots.append(list(kwargs["messages"]))
             outcome = next(outcomes)
-            if isinstance(outcome, Exception):
+            if isinstance(outcome, BaseException):
                 raise outcome
             return outcome
 
@@ -84,6 +84,54 @@ class RequestRecoveryTests(unittest.TestCase):
         self.assertIn("not undone", output)
         self.assertEqual(len(state["messages"]), 3)
         self.assertEqual(snapshots[-1][1]["content"], "Continue")
+
+
+    def test_prompt_interrupt_and_end_of_input_exit_cleanly(self):
+        for interruption in (KeyboardInterrupt(), EOFError()):
+            with self.subTest(interruption=type(interruption).__name__):
+                state, output, snapshots, client = self.run_assistant([interruption], [])
+                self.assertIn("Goodbye", output)
+                client.chat.assert_not_called()
+                self.assertEqual(len(state["messages"]), 1)
+
+    def test_request_interrupt_preserves_history_and_allows_next_request(self):
+        state, output, snapshots, client = self.run_assistant(
+            ["Earlier", "Cancel this", "Continue", "exit"],
+            [answer("Earlier answer"), KeyboardInterrupt(), answer("Recovered")],
+        )
+        self.assertIn("Request cancelled", output)
+        self.assertEqual(len(state["messages"]), 5)
+        self.assertNotIn("Cancel this", str(state["messages"]))
+        self.assertEqual(snapshots[-1][0]["role"], "system")
+        self.assertEqual(snapshots[-1][1]["content"], "Earlier")
+
+    def test_interrupt_after_tool_does_not_repeat_action(self):
+        request = SimpleNamespace(message=Message(
+            role="assistant", content="", tool_calls=[{
+                "function": {
+                    "name": "create_file_with_approval",
+                    "arguments": {"filename": "example.txt", "content": "Example"},
+                }
+            }],
+        ))
+        with patch("tools.create_file_with_approval", return_value="Created example.txt.") as create:
+            state, output, snapshots, client = self.run_assistant(
+                ["Create", "Continue", "exit"],
+                [request, KeyboardInterrupt(), answer("Recovered")],
+            )
+        create.assert_called_once()
+        self.assertEqual(len(state["messages"]), 3)
+        self.assertIn("not undone", output)
+
+    def test_status_interrupt_returns_to_prompt(self):
+        with patch("ollama.Client") as constructor:
+            constructor.return_value.list.side_effect = KeyboardInterrupt()
+            with patch("builtins.input", side_effect=["/status", "exit"]):
+                with redirect_stdout(io.StringIO()) as output:
+                    state = runpy.run_path(str(SCRIPT), run_name="__main__")
+        self.assertIn("Check cancelled", output.getvalue())
+        self.assertEqual(len(state["messages"]), 1)
+        constructor.return_value.chat.assert_not_called()
 
 
 if __name__ == "__main__":

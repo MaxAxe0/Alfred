@@ -70,7 +70,7 @@ Create greeting.txt containing Hello from Alfred.
 
 For file creation, review the destination and escaped content preview. Only typing `yes` at the Python confirmation prompt approves the write; other answers cancel it. Chat messages or file contents cannot supply this approval.
 
-Type `exit` to quit normally, or press Ctrl+C to interrupt the program. To unload the model from memory afterward:
+Type `exit` or press Ctrl+C at `You:` to quit cleanly. During a model request or tool execution, Ctrl+C cancels the current turn and returns to `You:`. Completed writes are not undone. At an approval prompt, Ctrl+C rejects that write; the assistant can then report the cancellation. During `/status`, Ctrl+C cancels just the status check. Ending terminal input also exits cleanly at `You:`. To unload the model from memory afterward:
 
 ```powershell
 ollama stop qwen3.5:9b
@@ -163,7 +163,7 @@ From the project folder:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-These checks use temporary folders rather than your sandbox and do not contact Ollama. They cover missing sandbox folders, file listing, invalid and outside paths, read-size boundaries, and recovery from simulated model-request failures.
+These checks use temporary folders rather than your sandbox and do not contact Ollama. They cover missing sandbox folders, file listing, invalid and outside paths, read-size boundaries, and recovery from simulated model-request failures and keyboard interruption.
 
 ## Future direction
 

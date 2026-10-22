@@ -22,7 +22,11 @@ status_client = Client(timeout=5.0)
 chat_client = Client(timeout=config.REQUEST_TIMEOUT_SECONDS)
 
 while True:
-    user_input = input("You: ")
+    try:
+        user_input = input("You: ")
+    except (KeyboardInterrupt, EOFError):
+        print("\n[Alfred] Goodbye.")
+        break
 
     command = user_input.strip().lower()
 
@@ -60,6 +64,8 @@ while True:
             print("[Status] Selected model:", "installed" if available else "not installed")
             if not available:
                 print(f"[Status] Download with: ollama pull {config.MODEL_NAME}")
+        except KeyboardInterrupt:
+            print("\n[Status] Check cancelled.")
         except TimeoutException:
             print("[Status] Ollama: check timed out (5-second request timeout)")
         except ConnectionError:
@@ -89,75 +95,80 @@ while True:
     messages.append({"role": "user", "content": user_input})
 
     # Allow several tool steps for one user request, with a fixed limit.
-    for step in range(config.MAX_TOOL_ROUNDS):
-        try:
-            print("[Alfred] Thinking...", flush=True)
-            request_start = perf_counter()
-            response = chat_client.chat(
-                model=config.MODEL_NAME,
-                messages=messages,
-                tools=[list_files, read_file, create_file_with_approval],
-                think=think_enabled,
-                options={"num_ctx": config.CONTEXT_TOKENS},
-            )
-        except (ConnectionError, TimeoutException, ResponseError, RequestError) as error:
-            # Handle expected request failures; programming errors still surface.
-            if isinstance(error, TimeoutException):
-                print(f"[Alfred] Ollama request timed out (inactivity limit: {config.REQUEST_TIMEOUT_SECONDS:g} seconds).")
-            elif isinstance(error, ConnectionError):
-                print("[Alfred] Cannot connect to Ollama. Open Ollama and try again.")
-            elif isinstance(error, ResponseError):
-                print(f"[Alfred] Ollama error ({error.status_code}): {error.error}")
-                if error.status_code == 404:
-                    print(f"[Alfred] Check MODEL_NAME and whether it is installed: ollama list")
-                    print(f"[Alfred] Download the selected model with: ollama pull {config.MODEL_NAME}")
-            else:
-                print("[Alfred] Communication with Ollama failed. Check the connection and try again.")
-
-            del messages[turn_start:]
-            print("[Alfred] This turn was removed from history. Any tools already run were not undone.")
-            # Do not retry automatically: a tool may already have created a file.
-            break
-
-        elapsed = perf_counter() - request_start
-        print(f"[Timing] Ollama request: {elapsed:.2f} seconds")
-
-        # Keep the full message, including any tool requests.
-        messages.append(response.message)
-
-        if not response.message.tool_calls:
-            print("Alfred:", response.message.content)
-            break
-
-        for call in response.message.tool_calls:
-            if call.function.name == "list_files":
-                print("[Tool] Listing sandbox files...", flush=True)
-                result = str(list_files())
-            elif call.function.name == "read_file":
-                # Validate the filename supplied by the model before using it.
-                filename = call.function.arguments.get("filename")
-                if isinstance(filename, str):
-                    print(f"[Tool] Reading sandbox file: {filename!r}", flush=True)
-                    result = read_file(filename)
+    try:
+        for step in range(config.MAX_TOOL_ROUNDS):
+            try:
+                print("[Alfred] Thinking...", flush=True)
+                request_start = perf_counter()
+                response = chat_client.chat(
+                    model=config.MODEL_NAME,
+                    messages=messages,
+                    tools=[list_files, read_file, create_file_with_approval],
+                    think=think_enabled,
+                    options={"num_ctx": config.CONTEXT_TOKENS},
+                )
+            except (ConnectionError, TimeoutException, ResponseError, RequestError) as error:
+                # Handle expected request failures; programming errors still surface.
+                if isinstance(error, TimeoutException):
+                    print(f"[Alfred] Ollama request timed out (inactivity limit: {config.REQUEST_TIMEOUT_SECONDS:g} seconds).")
+                elif isinstance(error, ConnectionError):
+                    print("[Alfred] Cannot connect to Ollama. Open Ollama and try again.")
+                elif isinstance(error, ResponseError):
+                    print(f"[Alfred] Ollama error ({error.status_code}): {error.error}")
+                    if error.status_code == 404:
+                        print(f"[Alfred] Check MODEL_NAME and whether it is installed: ollama list")
+                        print(f"[Alfred] Download the selected model with: ollama pull {config.MODEL_NAME}")
                 else:
-                    result = "Error: filename must be a string."
-            elif call.function.name == "create_file_with_approval":
-                filename = call.function.arguments.get("filename")
-                content = call.function.arguments.get("content")
-                result = create_file_with_approval(filename, content)
-            else:
-                result = "Error: unknown tool."
+                    print("[Alfred] Communication with Ollama failed. Check the connection and try again.")
 
-            if result.startswith(("Error:", "Cancelled:")):
-                print("[Tool]", result, flush=True)
-            else:
-                print("[Tool] Finished.", flush=True)
+                del messages[turn_start:]
+                print("[Alfred] This turn was removed from history. Any tools already run were not undone.")
+                # Do not retry automatically: a tool may already have created a file.
+                break
 
-            messages.append({
-                "role": "tool",
-                "tool_name": call.function.name,
-                "content": result,
-            })
+            elapsed = perf_counter() - request_start
+            print(f"[Timing] Ollama request: {elapsed:.2f} seconds")
 
-    else:
-        print(f"[Alfred] Stopped after {config.MAX_TOOL_ROUNDS} tool rounds. Please narrow your request.")
+            # Keep the full message, including any tool requests.
+            messages.append(response.message)
+
+            if not response.message.tool_calls:
+                print("Alfred:", response.message.content)
+                break
+
+            for call in response.message.tool_calls:
+                if call.function.name == "list_files":
+                    print("[Tool] Listing sandbox files...", flush=True)
+                    result = str(list_files())
+                elif call.function.name == "read_file":
+                    # Validate the filename supplied by the model before using it.
+                    filename = call.function.arguments.get("filename")
+                    if isinstance(filename, str):
+                        print(f"[Tool] Reading sandbox file: {filename!r}", flush=True)
+                        result = read_file(filename)
+                    else:
+                        result = "Error: filename must be a string."
+                elif call.function.name == "create_file_with_approval":
+                    filename = call.function.arguments.get("filename")
+                    content = call.function.arguments.get("content")
+                    result = create_file_with_approval(filename, content)
+                else:
+                    result = "Error: unknown tool."
+
+                if result.startswith(("Error:", "Cancelled:")):
+                    print("[Tool]", result, flush=True)
+                else:
+                    print("[Tool] Finished.", flush=True)
+
+                messages.append({
+                    "role": "tool",
+                    "tool_name": call.function.name,
+                    "content": result,
+                })
+
+        else:
+            print(f"[Alfred] Stopped after {config.MAX_TOOL_ROUNDS} tool rounds. Please narrow your request.")
+    except KeyboardInterrupt:
+        del messages[turn_start:]
+        print("\n[Alfred] Request cancelled. Returning to the prompt.")
+        print("[Alfred] This turn was removed from history. Any tools already run were not undone.")
