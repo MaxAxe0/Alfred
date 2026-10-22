@@ -1,5 +1,5 @@
 from ollama import chat
-from tools import list_files, read_file
+from tools import list_files, read_file, create_file_with_approval
 
 messages = [
     {
@@ -30,7 +30,7 @@ while True:
             response = chat(
                 model="qwen3.5:9b",
                 messages=messages,
-                tools=[list_files, read_file],
+                tools=[list_files, read_file, create_file_with_approval],
                 think=False,
                 options={"num_ctx": 8192},
             )
@@ -59,10 +59,14 @@ while True:
                     result = read_file(filename)
                 else:
                     result = "Error: filename must be a string."
+            elif call.function.name == "create_file_with_approval":
+                filename = call.function.arguments.get("filename")
+                content = call.function.arguments.get("content")
+                result = create_file_with_approval(filename, content)
             else:
                 result = "Error: unknown tool."
 
-            if result.startswith("Error:"):
+            if result.startswith(("Error:", "Cancelled:")):
                 print("[Tool]", result, flush=True)
             else:
                 print("[Tool] Finished.", flush=True)

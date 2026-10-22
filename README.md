@@ -10,6 +10,7 @@ The goal is to understand how an assistant works: conversation history, tool cal
 - Keep conversation history for the current session.
 - List files directly inside a designated `sandbox` folder.
 - Read UTF-8 text files directly inside that folder.
+- Create new sandbox `.txt` files after an exact preview and terminal approval; existing files are never overwritten. Creation is limited to 10,000 characters per file.
 - Reject read requests whose resolved paths are outside the sandbox or inside subfolders.
 
 The model requests tools; Python decides which function to execute and returns the result to the model.
@@ -64,7 +65,10 @@ Try these prompts:
 ```text
 What files are in my sandbox folder?
 Read example.txt from my sandbox.
+Create greeting.txt containing Hello from Alfred.
 ```
+
+For file creation, review the destination and escaped content preview. Only typing `yes` at the Python confirmation prompt approves the write; other answers cancel it. Chat messages or file contents cannot supply this approval.
 
 Type `exit` to quit normally, or press Ctrl+C to interrupt the program. To unload the model from memory afterward:
 
@@ -118,7 +122,7 @@ Quit and reopen Ollama after setting it. See [Ollama's configuration documentati
 
 This is an early prototype. The sandbox is an application-level path restriction, not operating-system isolation. File contents are untrusted input and could influence model responses. Large files are not yet limited, and errors beyond the handled connection failures can still stop the program. Use small, non-sensitive test files while developing.
 
-The assistant cannot currently create or modify files, control applications, send email, or upload to GitHub. Its conversational offers do not add capabilities beyond the implemented tools.
+The assistant can create new sandbox text files with approval. It cannot overwrite or edit existing files, control applications, send email, or upload to GitHub. Its conversational offers do not add capabilities beyond the implemented tools.
 
 ## Future direction
 
