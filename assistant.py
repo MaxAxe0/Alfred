@@ -1,5 +1,6 @@
 import config
-from ollama import chat
+from ollama import Client, ResponseError, chat
+from httpx import RequestError, TimeoutException
 from tools import list_files, read_file, create_file_with_approval
 
 messages = [
@@ -16,6 +17,7 @@ messages = [
 
 # Commands change this session only; config.py supplies the startup default.
 think_enabled = config.THINK
+status_client = Client(timeout=5.0)
 
 while True:
     user_input = input("You: ")
@@ -30,11 +32,39 @@ while True:
     # Handle local commands before adding anything to model history.
     if command == "/help":
         print("/help          Show available commands")
+        print("/status        Show settings and check the Ollama connection")
         print("/clear         Clear chat history, keeping Alfred's identity")
         print("/think         Show the current thinking setting")
         print("/think on      Enable thinking for subsequent requests")
         print("/think off     Disable thinking for subsequent requests")
         print("exit           Quit Alfred")
+        continue
+    if command == "/status":
+        print("[Status] Model:", config.MODEL_NAME)
+        print("[Status] Thinking:", "on" if think_enabled else "off")
+        print(f"[Status] Context budget: {config.CONTEXT_TOKENS:,} tokens")
+        print("[Status] Tool-round limit:", config.MAX_TOOL_ROUNDS)
+        print(f"[Status] Read limit: {config.MAX_READ_BYTES:,} bytes per file")
+        print(f"[Status] Write limit: {config.MAX_WRITE_CHARS:,} characters per file")
+        print("[Status] Checking Ollama...", flush=True)
+        try:
+            installed = status_client.list()
+            print("[Status] Ollama: reachable")
+            selected = config.MODEL_NAME
+            if ":" not in selected.rsplit("/", 1)[-1]:
+                selected += ":latest"
+            available = any(model.model == selected for model in installed.models)
+            print("[Status] Selected model:", "installed" if available else "not installed")
+            if not available:
+                print(f"[Status] Download with: ollama pull {config.MODEL_NAME}")
+        except TimeoutException:
+            print("[Status] Ollama: check timed out (5-second request timeout)")
+        except ConnectionError:
+            print("[Status] Ollama: unreachable. Open Ollama and try again.")
+        except ResponseError as error:
+            print(f"[Status] Ollama returned an error: {error}")
+        except RequestError:
+            print("[Status] Ollama: connection check failed.")
         continue
     if command == "/clear":
         del messages[1:]

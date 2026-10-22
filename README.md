@@ -78,11 +78,12 @@ ollama stop qwen3.5:9b
 
 ## Chat commands
 
-Commands are handled by Python without contacting Ollama and are not added to conversation history.
+Commands are handled by Python and are not added to conversation history. `/status` queries Ollama for its installed models with a five-second request timeout; it does not generate an answer or load a model. Other commands do not contact Ollama.
 
 | Command | Behavior |
 | --- | --- |
 | `/help` | Show the command list |
+| `/status` | Show current settings, Ollama connectivity, and whether the selected model is installed |
 | `/clear` | Clear conversation history while keeping Alfred's system identity; files are unaffected |
 | `/think` | Show whether thinking is enabled |
 | `/think on` | Enable thinking for subsequent model requests |
