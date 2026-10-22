@@ -1,7 +1,17 @@
 from ollama import chat
 from tools import list_files, read_file
 
-messages = []
+messages = [
+    {
+        "role": "system",
+        "content": (
+            "Your name is Alfred. You are the user's local AI assistant. "
+            "When asked your name, introduce yourself as Alfred. "
+            "Describe your capabilities accurately and only claim actions "
+            "that your tools have actually completed."
+        ),
+    }
+]
 
 while True:
     user_input = input("You: ")
