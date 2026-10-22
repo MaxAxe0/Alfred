@@ -7,7 +7,7 @@ def list_files() -> list[str]:
     return [item.name for item in folder.iterdir() if item.is_file()]
 
 def read_file(filename: str) -> str:
-    """Read a UTF-8 text file directly inside the sandbox folder."""
+    """Read a sandbox UTF-8 text file of at most 10,000 bytes."""
     folder = (Path(__file__).parent / "sandbox").resolve()
     file_path = (folder / filename).resolve()
 
@@ -15,7 +15,14 @@ def read_file(filename: str) -> str:
         return "Error: only files directly inside the sandbox are allowed."
 
     try:
-        return file_path.read_text(encoding="utf-8")
+        # Read one extra byte to detect oversize files without loading them fully.
+        with file_path.open("rb") as file:
+            data = file.read(10_001)
+
+        if len(data) > 10_000:
+            return "Error: file exceeds the 10,000-byte read limit."
+
+        return data.decode("utf-8")
     except FileNotFoundError:
         return "Error: file not found."
     except IsADirectoryError:
