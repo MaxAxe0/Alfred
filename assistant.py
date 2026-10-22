@@ -16,11 +16,13 @@ while True:
     # Allow several tool steps for one user request, with a fixed limit.
     for step in range(6):
         try:
-            print("[Alfred] Thinking... waiting for Ollama.", flush=True)
+            print("[Alfred] Thinking...", flush=True)
             response = chat(
-                model="qwen3:8b",
+                model="qwen3.5:9b",
                 messages=messages,
                 tools=[list_files, read_file],
+                think=False,
+                options={"num_ctx": 8192},
             )
         except ConnectionError:
             del messages[turn_start:]

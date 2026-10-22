@@ -6,7 +6,7 @@ The goal is to understand how an assistant works: conversation history, tool cal
 
 ## Current features
 
-- Chat with a local `qwen3:8b` model.
+- Chat with a local `qwen3.5:9b` model.
 - Keep conversation history for the current session.
 - List files directly inside a designated `sandbox` folder.
 - Read UTF-8 text files directly inside that folder.
@@ -18,7 +18,7 @@ The model requests tools; Python decides which function to execute and returns t
 
 - Python 3.13 (the version used during development).
 - [Ollama](https://ollama.com/download), installed and running.
-- Enough memory and disk space for [Qwen3 8B](https://ollama.com/library/qwen3:8b). The model download is approximately 5.2 GB; runtime memory use is higher.
+- Enough memory and disk space for [Qwen3.5 9B](https://ollama.com/library/qwen3.5:9b). Allow space for the model download and additional runtime memory; requirements depend on the model variant and context length.
 
 ## Setup on Windows
 
@@ -39,7 +39,7 @@ python -m venv .venv
 Download the local model:
 
 ```powershell
-ollama pull qwen3:8b
+ollama pull qwen3.5:9b
 ```
 
 Create the sandbox and a sample file:
@@ -69,8 +69,22 @@ Read example.txt from my sandbox.
 Type `exit` to quit normally, or press Ctrl+C to interrupt the program. To unload the model from memory afterward:
 
 ```powershell
-ollama stop qwen3:8b
+ollama stop qwen3.5:9b
 ```
+
+## Model settings
+
+Alfred currently configures each Ollama request in `assistant.py` with:
+
+| Setting | Value | Purpose |
+| --- | --- | --- |
+| `model` | `qwen3.5:9b` | Selects the downloaded local Qwen3.5 9B model |
+| `think` | `False` | Disables the separate thinking phase to reduce waiting; complex tasks may benefit from enabling it |
+| `options["num_ctx"]` | `8192` | Sets an 8,192-token context budget for conversation, tool data, and generation |
+
+The terminal's “Thinking...” message is a waiting indicator; it does not mean the model's separate thinking mode is enabled. The program currently displays the answer after generation finishes, rather than streaming it.
+
+To check GPU placement while the model is loaded, run `ollama ps`. `100% GPU` means the model is entirely loaded on the GPU, not that GPU utilization stays at 100%. The first request after loading may take longer than subsequent requests.
 
 ## How it works
 
