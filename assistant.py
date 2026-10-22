@@ -16,7 +16,7 @@ while True:
     # Allow several tool steps for one user request, with a fixed limit.
     for step in range(6):
         try:
-            print("[Assistant] Thinking... waiting for Ollama.", flush=True)
+            print("[Alfred] Thinking... waiting for Ollama.", flush=True)
             response = chat(
                 model="qwen3:8b",
                 messages=messages,
@@ -24,15 +24,15 @@ while True:
             )
         except ConnectionError:
             del messages[turn_start:]
-            print("[Assistant] Cannot connect to Ollama. Open Ollama and try again.")
-            print("[Assistant] This turn was removed from history. Any tools already run were not undone.")
+            print("[Alfred] Cannot connect to Ollama. Open Ollama and try again.")
+            print("[Alfred] This turn was removed from history. Any tools already run were not undone.")
             break
 
         # Keep the full message, including any tool requests.
         messages.append(response.message)
 
         if not response.message.tool_calls:
-            print("Assistant:", response.message.content)
+            print("Alfred:", response.message.content)
             break
 
         for call in response.message.tool_calls:
@@ -62,4 +62,4 @@ while True:
             })
 
     else:
-        print("[Assistant] Stopped after 6 tool rounds. Please narrow your request.")
+        print("[Alfred] Stopped after 6 tool rounds. Please narrow your request.")

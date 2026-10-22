@@ -25,8 +25,8 @@ The model requests tools; Python decides which function to execute and returns t
 Clone this repository, then open PowerShell in its folder:
 
 ```powershell
-git clone https://github.com/MaxAxe0/Northstar.git
-cd Northstar
+git clone https://github.com/MaxAxe0/Alfred.git
+cd Alfred
 ```
 
 Create a virtual environment and install the Python client:
