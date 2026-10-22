@@ -1,3 +1,4 @@
+import config
 from ollama import chat
 from tools import list_files, read_file, create_file_with_approval
 
@@ -24,15 +25,15 @@ while True:
     messages.append({"role": "user", "content": user_input})
 
     # Allow several tool steps for one user request, with a fixed limit.
-    for step in range(6):
+    for step in range(config.MAX_TOOL_ROUNDS):
         try:
             print("[Alfred] Thinking...", flush=True)
             response = chat(
-                model="qwen3.5:9b",
+                model=config.MODEL_NAME,
                 messages=messages,
                 tools=[list_files, read_file, create_file_with_approval],
-                think=False,
-                options={"num_ctx": 8192},
+                think=config.THINK,
+                options={"num_ctx": config.CONTEXT_TOKENS},
             )
         except ConnectionError:
             del messages[turn_start:]
@@ -78,4 +79,4 @@ while True:
             })
 
     else:
-        print("[Alfred] Stopped after 6 tool rounds. Please narrow your request.")
+        print(f"[Alfred] Stopped after {config.MAX_TOOL_ROUNDS} tool rounds. Please narrow your request.")

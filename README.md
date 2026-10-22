@@ -78,13 +78,18 @@ ollama stop qwen3.5:9b
 
 ## Model settings
 
-Alfred currently configures each Ollama request in `assistant.py` with:
+Edit `config.py` to change shared settings, then restart Alfred. `assistant.py` and `tools.py` both read this module. Current defaults:
 
-| Setting | Value | Purpose |
+| Setting | Default | Purpose |
 | --- | --- | --- |
-| `model` | `qwen3.5:9b` | Selects the downloaded local Qwen3.5 9B model |
-| `think` | `False` | Disables the separate thinking phase to reduce waiting; complex tasks may benefit from enabling it |
-| `options["num_ctx"]` | `8192` | Sets an 8,192-token context budget for conversation, tool data, and generation |
+| `MODEL_NAME` | `"qwen3.5:9b"` | Local model; download it through Ollama before switching |
+| `THINK` | `False` | Separate thinking phase; enabling it may help complex tasks but adds latency |
+| `CONTEXT_TOKENS` | `8192` | Request context budget for conversation, tool data, and generation |
+| `MAX_TOOL_ROUNDS` | `6` | Maximum sequential tool rounds per user request |
+| `MAX_READ_BYTES` | `10_000` | Maximum bytes read from one file |
+| `MAX_WRITE_CHARS` | `10_000` | Maximum characters in a proposed new file |
+
+Use positive integers for the numeric limits. Bytes and characters are different units: a Unicode character may use multiple UTF-8 bytes. Large settings can increase resource use, and these per-file limits do not enforce an overall conversation budget.
 
 The terminal's “Thinking...” message is a waiting indicator; it does not mean the model's separate thinking mode is enabled. The program currently displays the answer after generation finishes, rather than streaming it.
 
@@ -104,7 +109,8 @@ Each turn supports up to six sequential tool rounds. Tool activity and a waiting
 | File | Purpose |
 | --- | --- |
 | `assistant.py` | Interactive conversation and tool dispatch |
-| `tools.py` | Sandbox file listing and reading functions |
+| `tools.py` | Sandbox file listing, reading, and approved creation |
+| `config.py` | Shared model settings and file limits |
 | `sandbox/` | Local test files; excluded from Git |
 | `.gitignore` | Excludes environments, caches, sandbox data, and `.env` |
 

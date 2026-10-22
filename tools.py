@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import config
+
 
 def list_files() -> list[str]:
     """List all files in the sandbox folder without reading it's contents."""
@@ -7,7 +9,7 @@ def list_files() -> list[str]:
     return [item.name for item in folder.iterdir() if item.is_file()]
 
 def read_file(filename: str) -> str:
-    """Read a sandbox UTF-8 text file of at most 10,000 bytes."""
+    """Read a sandbox UTF-8 text file within the configured byte limit."""
     folder = (Path(__file__).parent / "sandbox").resolve()
     file_path = (folder / filename).resolve()
 
@@ -17,10 +19,10 @@ def read_file(filename: str) -> str:
     try:
         # Read one extra byte to detect oversize files without loading them fully.
         with file_path.open("rb") as file:
-            data = file.read(10_001)
+            data = file.read(config.MAX_READ_BYTES + 1)
 
-        if len(data) > 10_000:
-            return "Error: file exceeds the 10,000-byte read limit."
+        if len(data) > config.MAX_READ_BYTES:
+            return f"Error: file exceeds the {config.MAX_READ_BYTES:,}-byte read limit."
 
         return data.decode("utf-8")
     except FileNotFoundError:
@@ -37,8 +39,8 @@ def create_file(filename: str, content: str) -> str:
     if ":" in filename:
         return "Error: filename cannot contain a colon."
 
-    if len(content) > 10_000:
-        return "Error: content exceeds the 10,000-character limit."
+    if len(content) > config.MAX_WRITE_CHARS:
+        return f"Error: content exceeds the {config.MAX_WRITE_CHARS:,}-character limit."
 
     try:
         folder = (Path(__file__).parent / "sandbox").resolve()
@@ -68,8 +70,8 @@ def create_file_with_approval(filename: str, content: str) -> str:
         return "Error: filename and content must be strings."
 
     # Validate the proposal before asking for approval.
-    if ":" in filename or len(content) > 10_000:
-        return "Error: invalid filename or content exceeds 10,000 characters."
+    if ":" in filename or len(content) > config.MAX_WRITE_CHARS:
+        return f"Error: invalid filename or content exceeds {config.MAX_WRITE_CHARS:,} characters."
 
     try:
         folder = (Path(__file__).parent / "sandbox").resolve()
