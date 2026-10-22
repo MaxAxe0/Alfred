@@ -1,3 +1,4 @@
+from time import perf_counter
 import config
 from ollama import Client, ResponseError, chat
 from httpx import RequestError, TimeoutException
@@ -89,6 +90,7 @@ while True:
     for step in range(config.MAX_TOOL_ROUNDS):
         try:
             print("[Alfred] Thinking...", flush=True)
+            request_start = perf_counter()
             response = chat(
                 model=config.MODEL_NAME,
                 messages=messages,
@@ -101,6 +103,9 @@ while True:
             print("[Alfred] Cannot connect to Ollama. Open Ollama and try again.")
             print("[Alfred] This turn was removed from history. Any tools already run were not undone.")
             break
+
+        elapsed = perf_counter() - request_start
+        print(f"[Timing] Ollama request: {elapsed:.2f} seconds")
 
         # Keep the full message, including any tool requests.
         messages.append(response.message)

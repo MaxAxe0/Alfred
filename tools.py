@@ -3,20 +3,30 @@ from pathlib import Path
 import config
 
 
-def list_files() -> list[str]:
-    """List all files in the sandbox folder without reading it's contents."""
+def list_files() -> list[str] | str:
+    """List sandbox filenames, or return an error if the folder is unavailable."""
     folder = Path(__file__).parent / "sandbox"
-    return [item.name for item in folder.iterdir() if item.is_file()]
+    try:
+        return [item.name for item in folder.iterdir() if item.is_file()]
+    except FileNotFoundError:
+        return "Error: the sandbox folder does not exist."
+    except NotADirectoryError:
+        return "Error: the sandbox path is not a folder."
+    except OSError:
+        return "Error: the sandbox folder could not be listed."
 
 def read_file(filename: str) -> str:
     """Read a sandbox UTF-8 text file within the configured byte limit."""
-    folder = (Path(__file__).parent / "sandbox").resolve()
-    file_path = (folder / filename).resolve()
-
-    if file_path.parent != folder:
-        return "Error: only files directly inside the sandbox are allowed."
+    if ":" in filename:
+        return "Error: filename cannot contain a colon."
 
     try:
+        folder = (Path(__file__).parent / "sandbox").resolve()
+        file_path = (folder / filename).resolve()
+
+        if file_path.parent != folder:
+            return "Error: only files directly inside the sandbox are allowed."
+
         # Read one extra byte to detect oversize files without loading them fully.
         with file_path.open("rb") as file:
             data = file.read(config.MAX_READ_BYTES + 1)
@@ -31,7 +41,7 @@ def read_file(filename: str) -> str:
         return "Error: the requested path is a folder."
     except UnicodeDecodeError:
         return "Error: the file is not valid UTF-8 text."
-    except OSError:
+    except (OSError, ValueError):
         return "Error: the file could not be read."
     
 def create_file(filename: str, content: str) -> str:

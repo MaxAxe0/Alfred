@@ -1,7 +1,7 @@
 """Shared Alfred settings. Restart the assistant after changing these values."""
 
 MODEL_NAME = "qwen3.5:9b"
-THINK = False
+THINK = True
 CONTEXT_TOKENS = 8192
 MAX_TOOL_ROUNDS = 6
 

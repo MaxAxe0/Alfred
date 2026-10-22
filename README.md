@@ -99,7 +99,7 @@ Edit `config.py` to change shared settings, then restart Alfred. `assistant.py` 
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `MODEL_NAME` | `"qwen3.5:9b"` | Local model; download it through Ollama before switching |
-| `THINK` | `False` | Separate thinking phase; enabling it may help complex tasks but adds latency |
+| `THINK` | `True` | Enables the separate thinking phase; may help complex tasks and can add latency |
 | `CONTEXT_TOKENS` | `8192` | Request context budget for conversation, tool data, and generation |
 | `MAX_TOOL_ROUNDS` | `6` | Maximum sequential tool rounds per user request |
 | `MAX_READ_BYTES` | `10_000` | Maximum bytes read from one file |
@@ -110,6 +110,8 @@ Use positive integers for the numeric limits. Bytes and characters are different
 The terminal's “Thinking...” message is a waiting indicator; it does not mean the model's separate thinking mode is enabled. The program currently displays the answer after generation finishes, rather than streaming it.
 
 To check GPU placement while the model is loaded, run `ollama ps`. `100% GPU` means the model is entirely loaded on the GPU, not that GPU utilization stays at 100%. The first request after loading may take longer than subsequent requests.
+
+Each successful model request prints its elapsed time as `[Timing] Ollama request: ... seconds`. This measures the full client request, including any model loading and waiting, rather than generation alone. Tool execution and time spent approving writes are excluded. A turn with several tool rounds prints a separate timing for each request.
 
 ## How it works
 
@@ -145,6 +147,16 @@ Quit and reopen Ollama after setting it. See [Ollama's configuration documentati
 This is an early prototype. The sandbox is an application-level path restriction, not operating-system isolation. File contents are untrusted input and could influence model responses. Reads are limited to 10,000 bytes per file, but combined tool results and conversation history can still exceed the context budget. Errors beyond the handled failures can still stop the program. Use small, non-sensitive test files while developing.
 
 The assistant can create new sandbox text files with approval. It cannot overwrite or edit existing files, control applications, send email, or upload to GitHub. Its conversational offers do not add capabilities beyond the implemented tools.
+
+## Run checks
+
+From the project folder:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+These checks use temporary folders rather than your sandbox and do not contact Ollama. They cover missing sandbox folders, file listing, invalid and outside paths, and read-size boundaries.
 
 ## Future direction
 
