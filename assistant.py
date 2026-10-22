@@ -1,6 +1,6 @@
 from time import perf_counter
 import config
-from ollama import Client, ResponseError, chat
+from ollama import Client, ResponseError
 from httpx import RequestError, TimeoutException
 from tools import list_files, read_file, create_file_with_approval
 
@@ -19,6 +19,7 @@ messages = [
 # Commands change this session only; config.py supplies the startup default.
 think_enabled = config.THINK
 status_client = Client(timeout=5.0)
+chat_client = Client(timeout=config.REQUEST_TIMEOUT_SECONDS)
 
 while True:
     user_input = input("You: ")
@@ -45,6 +46,7 @@ while True:
         print("[Status] Thinking:", "on" if think_enabled else "off")
         print(f"[Status] Context budget: {config.CONTEXT_TOKENS:,} tokens")
         print("[Status] Tool-round limit:", config.MAX_TOOL_ROUNDS)
+        print(f"[Status] Request inactivity timeout: {config.REQUEST_TIMEOUT_SECONDS:g} seconds")
         print(f"[Status] Read limit: {config.MAX_READ_BYTES:,} bytes per file")
         print(f"[Status] Write limit: {config.MAX_WRITE_CHARS:,} characters per file")
         print("[Status] Checking Ollama...", flush=True)
@@ -91,17 +93,30 @@ while True:
         try:
             print("[Alfred] Thinking...", flush=True)
             request_start = perf_counter()
-            response = chat(
+            response = chat_client.chat(
                 model=config.MODEL_NAME,
                 messages=messages,
                 tools=[list_files, read_file, create_file_with_approval],
                 think=think_enabled,
                 options={"num_ctx": config.CONTEXT_TOKENS},
             )
-        except ConnectionError:
+        except (ConnectionError, TimeoutException, ResponseError, RequestError) as error:
+            # Handle expected request failures; programming errors still surface.
+            if isinstance(error, TimeoutException):
+                print(f"[Alfred] Ollama request timed out (inactivity limit: {config.REQUEST_TIMEOUT_SECONDS:g} seconds).")
+            elif isinstance(error, ConnectionError):
+                print("[Alfred] Cannot connect to Ollama. Open Ollama and try again.")
+            elif isinstance(error, ResponseError):
+                print(f"[Alfred] Ollama error ({error.status_code}): {error.error}")
+                if error.status_code == 404:
+                    print(f"[Alfred] Check MODEL_NAME and whether it is installed: ollama list")
+                    print(f"[Alfred] Download the selected model with: ollama pull {config.MODEL_NAME}")
+            else:
+                print("[Alfred] Communication with Ollama failed. Check the connection and try again.")
+
             del messages[turn_start:]
-            print("[Alfred] Cannot connect to Ollama. Open Ollama and try again.")
             print("[Alfred] This turn was removed from history. Any tools already run were not undone.")
+            # Do not retry automatically: a tool may already have created a file.
             break
 
         elapsed = perf_counter() - request_start

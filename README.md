@@ -102,6 +102,7 @@ Edit `config.py` to change shared settings, then restart Alfred. `assistant.py` 
 | `THINK` | `True` | Enables the separate thinking phase; may help complex tasks and can add latency |
 | `CONTEXT_TOKENS` | `8192` | Request context budget for conversation, tool data, and generation |
 | `MAX_TOOL_ROUNDS` | `6` | Maximum sequential tool rounds per user request |
+| `REQUEST_TIMEOUT_SECONDS` | `120.0` | Network inactivity timeout for model requests; not a total task deadline |
 | `MAX_READ_BYTES` | `10_000` | Maximum bytes read from one file |
 | `MAX_WRITE_CHARS` | `10_000` | Maximum characters in a proposed new file |
 
@@ -148,6 +149,12 @@ This is an early prototype. The sandbox is an application-level path restriction
 
 The assistant can create new sandbox text files with approval. It cannot overwrite or edit existing files, control applications, send email, or upload to GitHub. Its conversational offers do not add capabilities beyond the implemented tools.
 
+## Model request failures
+
+If Ollama is unreachable, times out, or returns an error (such as a missing model), Alfred reports the problem and returns to `You:`. The incomplete turn is removed from history while earlier turns and Alfred's identity are preserved. Completed file writes remain on disk. Failed turns are not automatically retried.
+
+Model requests use `REQUEST_TIMEOUT_SECONDS` from `config.py`. This is an HTTP connection/read/write/pool inactivity timeout, not a hard deadline for a complete turn. The separate `/status` check retains its five-second timeout. Restart after changing the setting.
+
 ## Run checks
 
 From the project folder:
@@ -156,7 +163,7 @@ From the project folder:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-These checks use temporary folders rather than your sandbox and do not contact Ollama. They cover missing sandbox folders, file listing, invalid and outside paths, and read-size boundaries.
+These checks use temporary folders rather than your sandbox and do not contact Ollama. They cover missing sandbox folders, file listing, invalid and outside paths, read-size boundaries, and recovery from simulated model-request failures.
 
 ## Future direction
 
