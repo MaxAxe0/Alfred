@@ -76,6 +76,21 @@ Type `exit` to quit normally, or press Ctrl+C to interrupt the program. To unloa
 ollama stop qwen3.5:9b
 ```
 
+## Chat commands
+
+Commands are handled by Python without contacting Ollama and are not added to conversation history.
+
+| Command | Behavior |
+| --- | --- |
+| `/help` | Show the command list |
+| `/clear` | Clear conversation history while keeping Alfred's system identity; files are unaffected |
+| `/think` | Show whether thinking is enabled |
+| `/think on` | Enable thinking for subsequent model requests |
+| `/think off` | Disable thinking for subsequent model requests |
+| `exit` | End the program |
+
+Thinking changes apply only to the running session and do not edit `config.py`. Restarting uses the `THINK` default again. `/clear` keeps the current thinking setting. Commands work at the `You:` prompt; at a file approval prompt, only `yes` approves and other input cancels.
+
 ## Model settings
 
 Edit `config.py` to change shared settings, then restart Alfred. `assistant.py` and `tools.py` both read this module. Current defaults:

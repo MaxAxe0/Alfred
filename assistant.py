@@ -14,11 +14,42 @@ messages = [
     }
 ]
 
+# Commands change this session only; config.py supplies the startup default.
+think_enabled = config.THINK
+
 while True:
     user_input = input("You: ")
 
-    if user_input.strip().lower() == "exit":
+    command = user_input.strip().lower()
+
+    if command == "exit":
         break
+    if not command:
+        continue
+
+    # Handle local commands before adding anything to model history.
+    if command == "/help":
+        print("/help          Show available commands")
+        print("/clear         Clear chat history, keeping Alfred's identity")
+        print("/think         Show the current thinking setting")
+        print("/think on      Enable thinking for subsequent requests")
+        print("/think off     Disable thinking for subsequent requests")
+        print("exit           Quit Alfred")
+        continue
+    if command == "/clear":
+        del messages[1:]
+        print("[Alfred] Conversation cleared. Files and thinking setting are unchanged.")
+        continue
+    if command.startswith("/"):
+        parts = command.split()
+        if parts == ["/think"]:
+            print("[Alfred] Thinking is", "on." if think_enabled else "off.")
+        elif len(parts) == 2 and parts[0] == "/think" and parts[1] in ("on", "off"):
+            think_enabled = parts[1] == "on"
+            print("[Alfred] Thinking is now", "on." if think_enabled else "off.")
+        else:
+            print("[Alfred] Unknown command or arguments. Type /help for commands.")
+        continue
 
     # Remember where this turn starts so a failed turn can be removed.
     turn_start = len(messages)
@@ -32,7 +63,7 @@ while True:
                 model=config.MODEL_NAME,
                 messages=messages,
                 tools=[list_files, read_file, create_file_with_approval],
-                think=config.THINK,
+                think=think_enabled,
                 options={"num_ctx": config.CONTEXT_TOKENS},
             )
         except ConnectionError:
