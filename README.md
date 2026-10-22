@@ -1,6 +1,6 @@
-# Northstar
+# Alfred
 
-A local AI assistant built as a hands-on learning project. Northstar uses Python and a model running through Ollama to chat, list sandbox files, and read text files.
+A local AI assistant built as a hands-on learning project. Alfred uses Python and a model running through Ollama to chat, list sandbox files, and read text files.
 
 The goal is to understand how an assistant works: conversation history, tool calling, permissions, and eventually communication between a dedicated AI host and a lightweight PC service.
 
@@ -46,7 +46,7 @@ Create the sandbox and a sample file:
 
 ```powershell
 New-Item -ItemType Directory -Path sandbox -Force
-Set-Content -Path sandbox\example.txt -Value "Hello from Northstar." -Encoding utf8
+Set-Content -Path sandbox\example.txt -Value "Hello from Alfred." -Encoding utf8
 ```
 
 The sandbox is ignored by Git, so each installation needs its own folder and sample files.
@@ -119,4 +119,4 @@ These are project goals, not implemented features.
 
 ## License
 
-Northstar's code is available under the [MIT License](LICENSE). Ollama, model weights, and other dependencies have their own licenses.
+Alfred's code is available under the [MIT License](LICENSE). Ollama, model weights, and other dependencies have their own licenses.
