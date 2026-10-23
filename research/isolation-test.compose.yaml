@@ -11,6 +11,7 @@
 #   $env:ROUTER_IP = "192.168.1.1"; $env:PC_IP = "192.168.1.x"
 #   docker compose -f research/isolation-test.compose.yaml run --rm control
 #   docker compose -f research/isolation-test.compose.yaml run --rm isolated
+#   docker compose -f research/isolation-test.compose.yaml run --rm proxy-probe   (R2)
 #   docker compose -f research/isolation-test.compose.yaml down
 
 name: alfred-isolation-test
@@ -34,6 +35,56 @@ services:
     environment: *targets
     volumes: *probe
     command: ["sh", "/probe.sh"]
+
+  # R2: the only container on both networks. Research traffic must pass
+  # through it; it refuses private destinations (Smokescreen's default).
+  proxy:
+    image: alfred-smokescreen:v0.1.0
+    build: ./proxy
+    networks: [isolated, open]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  # R2, test only: same proxy, but it asks a public DNS server (Cloudflare)
+  # instead of Docker/the router. Many home routers hide public names that point
+  # at private addresses, which would hide whether Smokescreen blocks them itself.
+  proxy-public-dns:
+    image: alfred-smokescreen:v0.1.0
+    networks: [isolated, open]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["--listen-ip", "0.0.0.0", "--listen-port", "4750", "--resolver-address", "1.1.1.1:53"]
+
+  # R2: stands in for the research service. Lives only on the isolated network
+  # and is told to send web requests through the proxy. Arguments after the
+  # service name are passed to curl, e.g. `run --rm proxied https://example.com`.
+  proxied:
+    image: curlimages/curl:8.16.0
+    networks: [isolated]
+    cap_drop: [ALL]
+    environment:
+      # Lowercase: curl ignores uppercase HTTP_PROXY (a defence against "httpoxy").
+      http_proxy: http://proxy:4750
+      https_proxy: http://proxy:4750
+    depends_on: [proxy]
+    entrypoint: ["curl"]
+
+  # R2: runs every allowed/refused check through the proxy.
+  proxy-probe:
+    image: curlimages/curl:8.16.0
+    networks: [isolated]
+    cap_drop: [ALL]
+    environment:
+      <<: *targets
+      # Lowercase: curl ignores uppercase HTTP_PROXY (a defence against "httpoxy").
+      http_proxy: http://proxy:4750
+      https_proxy: http://proxy:4750
+    volumes:
+      - ./proxy_probe.sh:/proxy_probe.sh:ro
+    depends_on: [proxy, proxy-public-dns]
+    entrypoint: ["sh", "/proxy_probe.sh"]
 
 networks:
   open: {}
