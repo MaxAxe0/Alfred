@@ -1,0 +1,42 @@
+# R1: baseline network isolation test. Not part of Alfred; run by hand.
+#
+# Two identical throwaway containers run the same probe script. The only
+# difference is the network:
+#   control  - an ordinary Docker network. Shows each target CAN be reached,
+#              so a failure on the isolated network actually means something.
+#   isolated - an internal network with no route out. Every target should fail.
+#
+# Home-network addresses come from environment variables so they stay out of Git.
+# Run from the project folder (PowerShell):
+#   $env:ROUTER_IP = "192.168.1.1"; $env:PC_IP = "192.168.1.x"
+#   docker compose -f research/isolation-test.compose.yaml run --rm control
+#   docker compose -f research/isolation-test.compose.yaml run --rm isolated
+#   docker compose -f research/isolation-test.compose.yaml down
+
+name: alfred-isolation-test
+
+services:
+  control:
+    image: alpine:3.20
+    networks: [open]
+    cap_drop: [ALL]
+    environment: &targets
+      ROUTER_IP: ${ROUTER_IP:?set ROUTER_IP first}
+      PC_IP: ${PC_IP:?set PC_IP first}
+    volumes: &probe
+      - ./isolation_probe.sh:/probe.sh:ro
+    command: ["sh", "/probe.sh"]
+
+  isolated:
+    image: alpine:3.20
+    networks: [isolated]
+    cap_drop: [ALL]
+    environment: *targets
+    volumes: *probe
+    command: ["sh", "/probe.sh"]
+
+networks:
+  open: {}
+  isolated:
+    # No gateway: no internet, no home network, no host.
+    internal: true
