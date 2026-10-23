@@ -93,6 +93,26 @@ Commands are handled by Python and are not added to conversation history. `/stat
 
 Thinking changes apply only to the running session and do not edit `config.py`. Restarting uses the `THINK` default again. `/clear` keeps the current thinking setting. Commands work at the `You:` prompt; at a file approval prompt, only `yes` approves and other input cancels.
 
+## Identity and private preferences
+
+`system_prompt.txt` contains Alfred's public identity and operating instructions. Keep it short and generic; it is sent as the system message on each model request.
+
+Create `.local/profile.json` using `profile.example.json` as a template. This private file is ignored by Git:
+
+```json
+{
+  "preferred_name": "",
+  "timezone": "America/New_York",
+  "default_email": ""
+}
+```
+
+Enter your preferred name and your own default recipient address locally, then restart Alfred. Keep Gmail credentials and tokens in their separate `.local/gmail/` location; do not add them to the profile. Only these three profile fields are supported, and profiles are capped at 4,096 bytes. Timezone is currently descriptive context, not a scheduling feature or timezone conversion setting.
+
+Python sends the preferred name, timezone, and a flag indicating whether a default recipient is set to the model. It does not add the default address to the standing context. For an explicit “email me” request, the model can request recipient `me`; Python resolves it to the private address and shows the actual destination for approval. Explicitly supplied addresses continue to work. If no default is set, Alfred asks for an address or reports the missing setting.
+
+`/clear` preserves the startup identity and preferences while clearing chat history. Profile edits take effect after restart. This is a small startup profile, not automatic long-term memory; conversations are still held in memory only. The email address can still enter conversation context if you type it into chat yourself.
+
 ## Model settings
 
 Edit `config.py` to change shared settings, then restart Alfred. `assistant.py` and `tools.py` both read this module. Current defaults:
@@ -131,6 +151,9 @@ Each turn supports up to six sequential tool rounds. Tool activity and a waiting
 | `assistant.py` | Interactive conversation and tool dispatch |
 | `tools.py` | Sandbox file listing, reading, and approved creation |
 | `config.py` | Shared model settings and file limits |
+| `system_prompt.txt` | Public identity and operating instructions |
+| `user_profile.py` | Validates private preferences and resolves the email alias |
+| `profile.example.json` | Blank public template for the ignored private profile |
 | `sandbox/` | Local test files; excluded from Git |
 | `.gitignore` | Excludes environments, caches, sandbox data, and `.env` |
 

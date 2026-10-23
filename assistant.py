@@ -4,22 +4,15 @@ from ollama import Client, ResponseError
 from httpx import RequestError, TimeoutException
 from tools import list_files, read_file, create_file_with_approval
 from gmail_tools import send_email_with_approval
+from user_profile import DEFAULT_PROFILE, load_profile, build_system_context, resolve_email_recipient
 
-messages = [
-    {
-        "role": "system",
-        "content": (
-            "Your name is Alfred. You are the user's local AI assistant. "
-            "When asked your name, introduce yourself as Alfred. "
-            "Describe your capabilities accurately and only claim actions "
-            "that your tools have actually completed. "
-            "You can propose a plain-text email using send_email_with_approval. "
-            "Ask for a recipient address if it is unknown; never invent one. "
-            "Python requests approval before sending. Report cancellation or "
-            "uncertainty accurately; never claim Gmail acceptance proves delivery."
-        ),
-    }
-]
+try:
+    profile = load_profile()
+except (OSError, ValueError) as error:
+    print("[Profile] Could not load private preferences. Check .local/profile.json. Using empty defaults.")
+    profile = DEFAULT_PROFILE.copy()
+
+messages = [{"role": "system", "content": build_system_context(profile)}]
 
 # Commands change this session only; config.py supplies the startup default.
 think_enabled = config.THINK
@@ -51,6 +44,8 @@ while True:
         print("exit           Quit Alfred")
         continue
     if command == "/status":
+        print("[Status] Private profile: startup preferences; restart to reload edits")
+        print("[Status] Default email:", "configured" if profile["default_email"] else "not configured")
         print("[Status] Model:", config.MODEL_NAME)
         print("[Status] Thinking:", "on" if think_enabled else "off")
         print(f"[Status] Context budget: {config.CONTEXT_TOKENS:,} tokens")
@@ -166,8 +161,13 @@ while True:
                         recipient = call.function.arguments.get("recipient")
                         subject = call.function.arguments.get("subject")
                         body = call.function.arguments.get("body")
-                        print("[Tool] Preparing an email for your approval...", flush=True)
-                        result = send_email_with_approval(recipient, subject, body)
+                        try:
+                            recipient = resolve_email_recipient(recipient, profile)
+                        except ValueError as error:
+                            result = "Error: " + str(error)
+                        else:
+                            print("[Tool] Preparing an email for your approval...", flush=True)
+                            result = send_email_with_approval(recipient, subject, body)
                 else:
                     result = "Error: unknown tool."
 

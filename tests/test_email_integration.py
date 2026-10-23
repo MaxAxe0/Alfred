@@ -30,7 +30,7 @@ class EmailIntegrationTests(unittest.TestCase):
     def run_assistant(self, inputs, responses):
         client = Mock()
         client.chat.side_effect = responses
-        with patch("ollama.Client", return_value=client):
+        with patch("ollama.Client", return_value=client), patch("user_profile.load_profile", return_value={"preferred_name": "", "timezone": "", "default_email": ""}):
             with patch("builtins.input", side_effect=inputs):
                 with redirect_stdout(io.StringIO()) as output:
                     state = runpy.run_path(str(SCRIPT), run_name="__main__")

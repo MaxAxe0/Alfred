@@ -36,7 +36,7 @@ class RequestRecoveryTests(unittest.TestCase):
             return outcome
 
         client.chat.side_effect = request
-        with patch("ollama.Client", return_value=client) as constructor:
+        with patch("ollama.Client", return_value=client) as constructor, patch("user_profile.load_profile", return_value={"preferred_name": "", "timezone": "", "default_email": ""}):
             with patch("builtins.input", side_effect=inputs):
                 with redirect_stdout(io.StringIO()) as output:
                     state = runpy.run_path(str(SCRIPT), run_name="__main__")
@@ -124,7 +124,7 @@ class RequestRecoveryTests(unittest.TestCase):
         self.assertIn("not undone", output)
 
     def test_status_interrupt_returns_to_prompt(self):
-        with patch("ollama.Client") as constructor:
+        with patch("ollama.Client") as constructor, patch("user_profile.load_profile", return_value={"preferred_name": "", "timezone": "", "default_email": ""}):
             constructor.return_value.list.side_effect = KeyboardInterrupt()
             with patch("builtins.input", side_effect=["/status", "exit"]):
                 with redirect_stdout(io.StringIO()) as output:
