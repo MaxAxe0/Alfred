@@ -7,6 +7,7 @@ The goal is to understand how an assistant works: conversation history, tool cal
 ## Current features
 
 - Chat with a local `qwen3.5:9b` model.
+- Propose and send one plain-text Gmail message per turn after terminal approval (requires local Gmail setup).
 - Keep conversation history for the current session.
 - List files directly inside a designated `sandbox` folder.
 - Read UTF-8 text files directly inside that folder, up to 10,000 bytes per file.
@@ -149,7 +150,7 @@ Quit and reopen Ollama after setting it. See [Ollama's configuration documentati
 
 This is an early prototype. The sandbox is an application-level path restriction, not operating-system isolation. File contents are untrusted input and could influence model responses. Reads are limited to 10,000 bytes per file, but combined tool results and conversation history can still exceed the context budget. Errors beyond the handled failures can still stop the program. Use small, non-sensitive test files while developing.
 
-The assistant can create new sandbox text files with approval. It cannot overwrite or edit existing files, control applications, send email, or upload to GitHub. Its conversational offers do not add capabilities beyond the implemented tools.
+The assistant can create new sandbox text files with approval. It cannot overwrite or edit existing files, control applications, attach files to emails, or upload to GitHub. Its conversational offers do not add capabilities beyond the implemented tools.
 
 ## Model request failures
 
@@ -169,7 +170,13 @@ These checks use temporary folders rather than your sandbox and do not contact O
 
 ## Gmail integration in progress
 
-Send-only OAuth setup is prepared in [GMAIL_SETUP.md](GMAIL_SETUP.md). The authorization script does not send mail and is not exposed as a model tool. Email sending and its approval step are the next integration milestone. Credentials stay in the Git-ignored `.local/gmail/` folder.
+Send-only OAuth setup is prepared in [GMAIL_SETUP.md](GMAIL_SETUP.md). The authorization script does not send mail and is not exposed as a model tool. Standalone plain-text sending is available with mandatory terminal approval:
+
+```powershell
+.\.venv\Scripts\python.exe gmail_tools.py
+```
+
+Enter one recipient, subject, and a one-line body. Review the exact preview; only `yes` sends. The sender is the Gmail account authorized during setup. It supports no attachments, Cc, or Bcc. `MAX_EMAIL_BODY_CHARS` in `config.py` limits the body (default 10,000). Gmail acceptance is not proof of inbox delivery. If the outcome is uncertain, inspect the sender's Sent folder before retrying. The assistant also offers `send_email_with_approval` as a model tool. Restart Alfred and ask, for example: `Send an email to recipient@example.com with subject Alfred test and body Hello from Alfred.` Replace that example address with your intended recipient. The model proposes the fields; Python validates and previews them and requires terminal approval. At most one email proposal is allowed per user turn, preventing model-driven retries within that turn. If a send is uncertain, check Sent before requesting another attempt. Credentials stay in the Git-ignored `.local/gmail/` folder.
 
 ## Future direction
 

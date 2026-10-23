@@ -10,3 +10,6 @@ REQUEST_TIMEOUT_SECONDS = 120.0
 # Reads count bytes; writes count Python string characters.
 MAX_READ_BYTES = 10_000
 MAX_WRITE_CHARS = 10_000
+
+# Maximum plain-text email body length.
+MAX_EMAIL_BODY_CHARS = 10_000

@@ -58,5 +58,12 @@ class GmailAuthTests(unittest.TestCase):
         self.assertTrue((self.folder / "token.json").exists())
 
 
+    def test_noninteractive_mode_never_opens_sign_in(self):
+        with patch.object(gmail_auth.InstalledAppFlow, "from_client_secrets_file") as flow:
+            with self.assertRaises(ValueError):
+                gmail_auth.connect_gmail(interactive=False)
+            flow.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -14,7 +14,7 @@ CLIENT_FILE = AUTH_DIR / "credentials.json"
 TOKEN_FILE = AUTH_DIR / "token.json"
 
 
-def connect_gmail():
+def connect_gmail(interactive=True):
     """Authorize send-only Gmail access and save the local token."""
     credentials = None
     if TOKEN_FILE.exists():
@@ -29,6 +29,8 @@ def connect_gmail():
                 credentials = None
 
     if not credentials or not credentials.valid:
+        if not interactive:
+            raise ValueError("Run gmail_auth.py to authorize Gmail before sending.")
         if not CLIENT_FILE.exists():
             raise FileNotFoundError("Save your Desktop OAuth JSON as .local/gmail/credentials.json first. See GMAIL_SETUP.md.")
         flow = InstalledAppFlow.from_client_secrets_file(str(CLIENT_FILE), SCOPES)

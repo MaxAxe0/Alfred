@@ -3,6 +3,7 @@ import config
 from ollama import Client, ResponseError
 from httpx import RequestError, TimeoutException
 from tools import list_files, read_file, create_file_with_approval
+from gmail_tools import send_email_with_approval
 
 messages = [
     {
@@ -11,7 +12,11 @@ messages = [
             "Your name is Alfred. You are the user's local AI assistant. "
             "When asked your name, introduce yourself as Alfred. "
             "Describe your capabilities accurately and only claim actions "
-            "that your tools have actually completed."
+            "that your tools have actually completed. "
+            "You can propose a plain-text email using send_email_with_approval. "
+            "Ask for a recipient address if it is unknown; never invent one. "
+            "Python requests approval before sending. Report cancellation or "
+            "uncertainty accurately; never claim Gmail acceptance proves delivery."
         ),
     }
 ]
@@ -91,6 +96,7 @@ while True:
         continue
 
     # Remember where this turn starts so a failed turn can be removed.
+    email_proposed = False  # One email proposal per user turn; no model-driven resend.
     turn_start = len(messages)
     messages.append({"role": "user", "content": user_input})
 
@@ -103,7 +109,7 @@ while True:
                 response = chat_client.chat(
                     model=config.MODEL_NAME,
                     messages=messages,
-                    tools=[list_files, read_file, create_file_with_approval],
+                    tools=[list_files, read_file, create_file_with_approval, send_email_with_approval],
                     think=think_enabled,
                     options={"num_ctx": config.CONTEXT_TOKENS},
                 )
@@ -152,10 +158,20 @@ while True:
                     filename = call.function.arguments.get("filename")
                     content = call.function.arguments.get("content")
                     result = create_file_with_approval(filename, content)
+                elif call.function.name == "send_email_with_approval":
+                    if email_proposed:
+                        result = "Error: only one email proposal is allowed per user turn. Ask the user before trying again; check Sent if the previous outcome was uncertain."
+                    else:
+                        email_proposed = True
+                        recipient = call.function.arguments.get("recipient")
+                        subject = call.function.arguments.get("subject")
+                        body = call.function.arguments.get("body")
+                        print("[Tool] Preparing an email for your approval...", flush=True)
+                        result = send_email_with_approval(recipient, subject, body)
                 else:
                     result = "Error: unknown tool."
 
-                if result.startswith(("Error:", "Cancelled:")):
+                if result.startswith(("Error:", "Cancelled:", "Uncertain:")):
                     print("[Tool]", result, flush=True)
                 else:
                     print("[Tool] Finished.", flush=True)
