@@ -250,6 +250,10 @@ Enter one recipient, subject, and a one-line body. Review the exact preview; onl
 
 These are project goals, not implemented features.
 
+## Disclaimer
+
+This project was developed with the assistance of ChatGPT and Claude for research, planning, and implementation.
+
 ## License
 
 Alfred's code is available under the [MIT License](LICENSE). Ollama, model weights, and other dependencies have their own licenses.
