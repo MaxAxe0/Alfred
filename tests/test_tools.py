@@ -44,5 +44,37 @@ class FileToolTests(unittest.TestCase):
             self.assertIn("4-byte read limit", tools.read_file("note.txt"))
 
 
+    def test_approved_creation_writes_exact_content(self):
+        with patch("builtins.input", return_value="yes"):
+            self.assertEqual(tools.create_file_with_approval("approved.txt", "Exact text"), "Created approved.txt.")
+        self.assertEqual((self.sandbox / "approved.txt").read_text(encoding="utf-8"), "Exact text")
+
+    def test_denied_or_interrupted_approval_writes_nothing(self):
+        for answer in ("no", "", "y", KeyboardInterrupt(), EOFError()):
+            with self.subTest(answer=repr(answer)):
+                if isinstance(answer, BaseException):
+                    approval = patch("builtins.input", side_effect=answer)
+                else:
+                    approval = patch("builtins.input", return_value=answer)
+                with approval:
+                    self.assertTrue(tools.create_file_with_approval("cancelled.txt", "Text").startswith("Cancelled:"))
+                self.assertFalse((self.sandbox / "cancelled.txt").exists())
+
+    def test_existing_file_is_not_overwritten_or_offered_for_approval(self):
+        target = self.sandbox / "existing.txt"
+        target.write_text("Original", encoding="utf-8")
+        with patch("builtins.input") as approval:
+            self.assertTrue(tools.create_file_with_approval("existing.txt", "Replacement").startswith("Error:"))
+            approval.assert_not_called()
+        self.assertTrue(tools.create_file("existing.txt", "Replacement").startswith("Error:"))
+        self.assertEqual(target.read_text(encoding="utf-8"), "Original")
+
+    def test_outside_creation_is_rejected_before_approval(self):
+        with patch("builtins.input") as approval:
+            self.assertTrue(tools.create_file_with_approval("../outside.txt", "Text").startswith("Error:"))
+            approval.assert_not_called()
+        self.assertFalse((self.root / "outside.txt").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

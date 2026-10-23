@@ -34,7 +34,7 @@ Create a virtual environment and install the Python client:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install ollama
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 Download the local model:
@@ -135,6 +135,8 @@ Each turn supports up to six sequential tool rounds. Tool activity and a waiting
 
 ## Privacy and limitations
 
+See [SECURITY.md](SECURITY.md) for which data stays local and how future integrations keep credentials out of the public repository.
+
 The configured model runs locally, without per-token API charges. File contents returned by tools become part of the conversation sent to local Ollama. History stays in Python memory and is lost when the program exits.
 
 To disable Ollama's cloud features on Windows:
@@ -164,6 +166,10 @@ From the project folder:
 ```
 
 These checks use temporary folders rather than your sandbox and do not contact Ollama. They cover missing sandbox folders, file listing, invalid and outside paths, read-size boundaries, and recovery from simulated model-request failures and keyboard interruption.
+
+## Gmail integration in progress
+
+Send-only OAuth setup is prepared in [GMAIL_SETUP.md](GMAIL_SETUP.md). The authorization script does not send mail and is not exposed as a model tool. Email sending and its approval step are the next integration milestone. Credentials stay in the Git-ignored `.local/gmail/` folder.
 
 ## Future direction
 

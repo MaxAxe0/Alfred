@@ -4,3 +4,19 @@ __pycache__/
 sandbox/
 .env
 notes.md
+GMAIL_SETUP.md
+SECURITY.md
+
+.local/
+credentials*.json
+client_secret*.json
+token*.json
+
+# Future integrations: credentials, account settings, and runtime records stay local.
+.env.*
+config.local.py
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
