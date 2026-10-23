@@ -1,0 +1,41 @@
+name: alfred
+
+services:
+  alfred:
+    image: alfred-app:local
+    build:
+      context: .
+    init: true
+    stdin_open: true
+    tty: true
+    environment:
+      OLLAMA_HOST: http://host.docker.internal:11434
+      NO_PROXY: host.docker.internal,localhost,127.0.0.1
+    # No host ports, host network, privileged mode, or Docker socket access.
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    volumes:
+      - type: bind
+        source: ./sandbox
+        target: /app/sandbox
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.local/profile.json
+        target: /app/.local/profile.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.local/gmail
+        target: /app/.local/gmail
+        bind:
+          create_host_path: false

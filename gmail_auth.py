@@ -32,7 +32,7 @@ def connect_gmail(interactive=True):
         if not interactive:
             raise ValueError("Run gmail_auth.py to authorize Gmail before sending.")
         if not CLIENT_FILE.exists():
-            raise FileNotFoundError("Save your Desktop OAuth JSON as .local/gmail/credentials.json first. See GMAIL_SETUP.md.")
+            raise FileNotFoundError("Save your Desktop OAuth JSON as .local/gmail/credentials.json first. See the Gmail section of README.md.")
         flow = InstalledAppFlow.from_client_secrets_file(str(CLIENT_FILE), SCOPES)
         credentials = flow.run_local_server(
             host="localhost",
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     except FileNotFoundError as error:
         print("[Gmail]", error)
     except ValueError:
-        print("[Gmail] Credentials, permissions, or sign-in are invalid. Check GMAIL_SETUP.md and reconnect.")
+        print("[Gmail] Credentials, permissions, or sign-in are invalid. Check the Gmail section of README.md and reconnect.")
     except Exception:
         # Do not echo authentication responses or tokens into terminal logs.
         print("[Gmail] Sign-in failed. Check the connection and Google consent setup, then retry.")

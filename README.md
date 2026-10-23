@@ -53,6 +53,34 @@ Set-Content -Path sandbox\example.txt -Value "Hello from Alfred." -Encoding utf8
 
 The sandbox is ignored by Git, so each installation needs its own folder and sample files.
 
+## Docker option
+
+Start Docker Desktop with Linux containers and keep Ollama running natively. Prepare the local runtime paths:
+
+```powershell
+New-Item -ItemType Directory -Path sandbox -Force
+New-Item -ItemType Directory -Path .local/gmail -Force
+if (-not (Test-Path .local/profile.json)) {
+    Copy-Item profile.example.json .local/profile.json
+}
+docker compose build
+docker compose run --rm alfred
+```
+
+The Dockerfile packages public source and dependencies. `.dockerignore` excludes everything except allowlisted build files. Compose mounts `sandbox/` read/write, `.local/profile.json` read-only, and `.local/gmail/` read/write for token updates. Private files stay on the host and are not copied into the image. No host ports or Docker socket are exposed.
+
+The app runs as a non-root user with a read-only root filesystem, temporary `/tmp`, one CPU, and 512 MB memory. These limits exclude native Ollama, which uses the host GPU and its existing model storage. `OLLAMA_HOST` points to `host.docker.internal:11434`; use `/status` to check it. This targets Docker Desktop on Windows/macOS.
+
+Use the interactive command above rather than detached mode so approvals can read terminal input. `exit` stops Alfred; `--rm` removes the container while mounted data persists. Rebuild after editing code, `config.py`, or `system_prompt.txt`; private-profile changes need only a new run. Perform Gmail browser sign-in on the host, not inside the container.
+
+Run image tests without network or private mounts:
+
+```powershell
+docker run --rm --network none alfred-app:local python -m unittest discover -s tests -v
+```
+
+This migration does not implement public-web-only networking. The app still has normal outbound networking for Ollama and Gmail; isolated research and LAN blocking remain future work.
+
 ## Run
 
 Keep Ollama running, then start the assistant:
@@ -159,7 +187,7 @@ Each turn supports up to six sequential tool rounds. Tool activity and a waiting
 
 ## Privacy and limitations
 
-See [SECURITY.md](SECURITY.md) for which data stays local and how future integrations keep credentials out of the public repository.
+Keep credentials, account-specific preferences, and private runtime data under the Git-ignored `.local/` folder, never in public source or `config.py`. Tests use synthetic data. Credential files are ordinary local files, not encrypted by Alfred. Ignore rules do not remove previously tracked files or prevent force-adding them; review staged changes before pushing. If a credential is published, revoke it first, then address the Git history.
 
 The configured model runs locally, without per-token API charges. File contents returned by tools become part of the conversation sent to local Ollama. History stays in Python memory and is lost when the program exits.
 
@@ -193,7 +221,17 @@ These checks use temporary folders rather than your sandbox and do not contact O
 
 ## Gmail integration in progress
 
-Send-only OAuth setup is prepared in [GMAIL_SETUP.md](GMAIL_SETUP.md). The authorization script does not send mail and is not exposed as a model tool. Standalone plain-text sending is available with mandatory terminal approval:
+To configure your own Gmail account:
+
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com/) and enable the Gmail API.
+2. Configure Google Auth Platform branding. For personal Gmail, choose External audience, keep Testing enabled, and add the sending account as a test user.
+3. Add only the scope `https://www.googleapis.com/auth/gmail.send` under Data Access.
+4. Create a Desktop app OAuth client and download its JSON to `.local/gmail/credentials.json`. If offered an AI-agent designation, select it for Alfred.
+5. Run the host-side command `.\.venv\Scripts\python.exe gmail_auth.py`, sign in as the sending account, and review consent. The token is saved to `.local/gmail/token.json`.
+
+The authorization script does not send mail and is not exposed as a model tool. Keep credentials and tokens local, outside the sandbox. Google may require renewed consent; External apps in Testing with Gmail scopes have seven-day refresh-token expiry. See [Google's setup guide](https://developers.google.com/workspace/gmail/api/quickstart/python) and [token-expiry documentation](https://developers.google.com/identity/protocols/oauth2#expiration).
+
+Standalone plain-text sending is available with mandatory terminal approval:
 
 ```powershell
 .\.venv\Scripts\python.exe gmail_tools.py

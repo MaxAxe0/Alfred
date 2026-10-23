@@ -6,6 +6,7 @@ sandbox/
 notes.md
 GMAIL_SETUP.md
 SECURITY.md
+DOCKER.md
 
 .local/
 credentials*.json
@@ -20,3 +21,7 @@ config.local.py
 *.p12
 *.pfx
 *.log
+
+# Keep Markdown notes local; publish only the root README.
+*.[mM][dD]
+!/README.md

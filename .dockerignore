@@ -1,0 +1,13 @@
+# Allowlist: only these public source files enter the build context.
+**
+!Dockerfile
+!requirements.txt
+!assistant.py
+!config.py
+!tools.py
+!gmail_auth.py
+!gmail_tools.py
+!user_profile.py
+!system_prompt.txt
+!tests/
+!tests/test_*.py
