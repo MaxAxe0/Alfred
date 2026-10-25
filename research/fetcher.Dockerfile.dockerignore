@@ -1,0 +1,6 @@
+# Allowlist for fetcher.Dockerfile: only these files enter the build context.
+**
+!requirements.txt
+!net_policy.py
+!fetcher.py
+!live_check.py

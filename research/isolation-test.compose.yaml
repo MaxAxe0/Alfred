@@ -12,6 +12,7 @@
 #   docker compose -f research/isolation-test.compose.yaml run --rm control
 #   docker compose -f research/isolation-test.compose.yaml run --rm isolated
 #   docker compose -f research/isolation-test.compose.yaml run --rm proxy-probe   (R2)
+#   docker compose -f research/isolation-test.compose.yaml run --rm fetcher       (R3d)
 #   docker compose -f research/isolation-test.compose.yaml down
 
 name: alfred-isolation-test
@@ -41,7 +42,9 @@ services:
   proxy:
     image: alfred-smokescreen:v0.1.0
     build: ./proxy
-    networks: [isolated, open]
+    # R3d: its outside leg has a network of its own, so nothing else can reach the proxy
+    # from that side (R1's control container stays on "open").
+    networks: [isolated, egress]
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -100,8 +103,27 @@ services:
     depends_on: [proxy]
     entrypoint: ["sh", "/proxy_probe.sh"]
 
+  # R3d: the research fetcher, running live checks through the proxy.
+  fetcher:
+    image: alfred-research-fetcher:r3d
+    build:
+      context: .
+      dockerfile: fetcher.Dockerfile
+    networks: [isolated]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 64
+    environment:
+      ROUTER_IP: ${ROUTER_IP:?set ROUTER_IP first}
+    depends_on: [proxy]
+
 networks:
   open: {}
+  # R3d: the proxy's way out. Only the proxy is attached.
+  egress: {}
   isolated:
     # No gateway: no internet, no home network, no host.
     internal: true
