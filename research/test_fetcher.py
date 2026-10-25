@@ -4,6 +4,7 @@ These checks make no network connections. Each test builds a fake website
 (httpx.MockTransport) that answers however the test needs.
 """
 
+import codecs
 import gzip
 import itertools
 import tracemalloc
@@ -238,6 +239,96 @@ class RedirectTests(unittest.TestCase):
                 fetch("https://example.com/a", client=fake_site(handler))
 
 
+def typed(content_type, body=b"<p>hello</p>"):
+    """A handler answering with this Content-Type header (None = no header at all)."""
+    def handler(request):
+        headers = {} if content_type is None else {"content-type": content_type}
+        return httpx.Response(200, stream=httpx.ByteStream(body), headers=headers)
+    return handler
+
+
+class ContentTypeTests(unittest.TestCase):
+    def test_text_types_are_accepted(self):
+        for content_type in ("text/html", "text/plain", "application/xhtml+xml",
+                             "Text/HTML; Charset=UTF-8", "text/html;charset=utf-8; foo=bar"):
+            with self.subTest(content_type=content_type):
+                fetch("https://example.com/", client=fake_site(typed(content_type)))
+
+    def test_other_types_are_refused(self):
+        for content_type in ("image/png", "application/pdf", "application/json",
+                             "application/octet-stream", "video/mp4", "text/htmlx"):
+            with self.subTest(content_type=content_type):
+                with self.assertRaisesRegex(FetchError, "unsupported content type"):
+                    fetch("https://example.com/", client=fake_site(typed(content_type)))
+
+    def test_missing_content_type_is_refused(self):
+        for content_type in (None, "", "; charset=utf-8"):
+            with self.subTest(content_type=content_type):
+                with self.assertRaisesRegex(FetchError, "did not say"):
+                    fetch("https://example.com/", client=fake_site(typed(content_type)))
+
+    def test_refused_types_are_not_downloaded(self):
+        # Reading this body would raise "larger than"; refusing by type must happen first.
+        huge = b"x" * (fetcher.MAX_BYTES + 1)
+        with self.assertRaisesRegex(FetchError, "unsupported content type"):
+            fetch("https://example.com/", client=fake_site(typed("application/zip", huge)))
+
+
+class DecodingTests(unittest.TestCase):
+    def decode(self, body, content_type="text/html"):
+        result = fetch("https://example.com/", client=fake_site(typed(content_type, body)))
+        return result.text, result.encoding
+
+    def test_utf8_by_default(self):
+        self.assertEqual(self.decode("café ☕".encode("utf-8")), ("café ☕", "utf-8"))
+
+    def test_header_charset_is_used(self):
+        text, encoding = self.decode("café".encode("cp1252"), "text/html; charset=windows-1252")
+        self.assertEqual((text, encoding), ("café", "cp1252"))
+
+    def test_latin1_and_ascii_labels_mean_windows_1252(self):
+        # 0x93/0x94 are curly quotes in windows-1252 but invisible control codes in latin-1.
+        for label in ("iso-8859-1", "latin1", "us-ascii"):
+            with self.subTest(label=label):
+                self.assertEqual(self.decode(b"\x93hi\x94", f"text/html; charset={label}")[0], "“hi”")
+
+    def test_meta_charset_is_used_when_the_header_has_none(self):
+        for meta in (b'<meta charset="shift_jis">', b"<META CHARSET=shift_jis>",
+                     b'<meta http-equiv="Content-Type" content="text/html; charset=shift_jis">'):
+            with self.subTest(meta=meta):
+                text, encoding = self.decode(meta + "日本".encode("shift_jis"))
+                self.assertTrue(text.endswith("日本"))
+                self.assertEqual(encoding, "shift_jis")
+
+    def test_header_wins_over_meta(self):
+        body = b'<meta charset="shift_jis">' + "café".encode("utf-8")
+        self.assertEqual(self.decode(body, "text/html; charset=utf-8")[1], "utf-8")
+
+    def test_meta_is_ignored_for_plain_text(self):
+        self.assertEqual(self.decode(b'<meta charset="shift_jis"> hi', "text/plain")[1], "utf-8")
+
+    def test_meta_only_counts_in_the_first_1024_bytes(self):
+        body = b" " * 1024 + b'<meta charset="shift_jis">'
+        self.assertEqual(self.decode(body)[1], "utf-8")
+
+    def test_byte_order_mark_wins_and_is_removed(self):
+        body = codecs.BOM_UTF8 + "café".encode("utf-8")
+        self.assertEqual(self.decode(body, "text/html; charset=windows-1252"), ("café", "utf-8"))
+        self.assertEqual(self.decode(codecs.BOM_UTF16_LE + "hi".encode("utf-16-le"))[0], "hi")
+
+    def test_unknown_or_non_text_encodings_fall_back_to_utf8(self):
+        for label in ("no-such-encoding", "base64", "rot13"):
+            with self.subTest(label=label):
+                self.assertEqual(self.decode(b"hello", f"text/html; charset={label}"), ("hello", "utf-8"))
+
+    def test_invalid_bytes_are_replaced_not_fatal(self):
+        self.assertEqual(self.decode(b"ok \xff\xfe there")[0], "ok �� there")
+
+    def test_body_bytes_are_kept_alongside_the_text(self):
+        result = fetch("https://example.com/", client=fake_site(typed("text/html", b"<p>x</p>")))
+        self.assertEqual((result.body, result.text), (b"<p>x</p>", "<p>x</p>"))
+
+
 class LimitTests(unittest.TestCase):
     def test_declared_size_too_large(self):
         handler = page(**{"content-length": str(fetcher.MAX_BYTES + 1)})
@@ -247,7 +338,8 @@ class LimitTests(unittest.TestCase):
     def test_body_larger_than_limit_without_a_declared_size(self):
         def handler(request):
             # A generator body has no Content-Length, so only the running count can stop it.
-            return httpx.Response(200, content=(b"x" * 100 for _ in range(5)))
+            return httpx.Response(200, content=(b"x" * 100 for _ in range(5)),
+                                  headers={"content-type": "text/html"})
         with mock.patch.object(fetcher, "MAX_BYTES", 250):
             with self.assertRaisesRegex(FetchError, "larger than 250"):
                 fetch("https://example.com/", client=fake_site(handler))
@@ -316,7 +408,8 @@ class CompressionTests(unittest.TestCase):
         bomb = gzip_bomb(200)
 
         def handler(request):
-            return httpx.Response(200, content=in_pieces(bomb), headers={"content-encoding": "gzip"})
+            return httpx.Response(200, content=in_pieces(bomb),
+                                  headers={"content-encoding": "gzip", "content-type": "text/html"})
 
         tracemalloc.start()
         try:

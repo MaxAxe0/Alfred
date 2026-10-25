@@ -2,14 +2,16 @@
 
 R3a: URL checks, an explicit proxy, timeouts, and a size limit.
 R3b: redirects are followed by hand, and every new address is checked first.
-Content types are not checked yet (R3c).
+R3c: only text pages are accepted, and they are decoded to text.
 
 The fetcher runs on the isolated network, where it cannot look up names.
 The proxy resolves names and refuses private addresses; this module checks the
 URL itself (scheme, port, local names) with net_policy before anything is sent.
 """
 
+import codecs
 import ipaddress
+import re
 import time
 import zlib
 from dataclasses import dataclass
@@ -30,6 +32,8 @@ ACCEPT_ENCODING = "gzip, deflate"  # The only compression _read_limited can unpa
 DEFAULT_PORTS = {"http": 80, "https": 443}
 MAX_REDIRECTS = 5
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+ACCEPTED_TYPES = {"text/html", "text/plain", "application/xhtml+xml"}
+DEFAULT_ENCODING = "utf-8"  # The web's default when nothing else says otherwise.
 
 
 class FetchError(Exception):
@@ -46,6 +50,8 @@ class FetchResult:
     status: int
     content_type: str
     body: bytes
+    text: str              # The body decoded to text.
+    encoding: str          # The text encoding that was used.
     redirects: tuple = ()  # Earlier addresses that redirected, in order.
 
 
@@ -81,14 +87,19 @@ def fetch(url, client=None):
             with client.stream("GET", request_url) as response:
                 next_url = _redirect_target(response, request_url)
                 if next_url is None:
+                    content_type = response.headers.get("content-type", "")
                     _check_status(response)
+                    _check_content_type(content_type)  # Before reading: no downloads of images or files.
                     _check_declared_size(response)
                     body = _read_limited(response, deadline)
+                    text, encoding = _decode(body, content_type)
                     return FetchResult(
                         url=str(request_url),
                         status=response.status_code,
-                        content_type=response.headers.get("content-type", ""),
+                        content_type=content_type,
                         body=body,
+                        text=text,
+                        encoding=encoding,
                         redirects=tuple(redirects),
                     )
             # A redirect. Its body is never read; the new address is checked before it is used.
@@ -176,6 +187,66 @@ def _check_status(response):
         raise FetchBlocked(f"refused by proxy: {reason}")
     if not 200 <= response.status_code < 300:
         raise FetchError(f"server answered HTTP {response.status_code}")
+
+
+def _media_type(content_type):
+    """Split a Content-Type header: 'text/html; charset=UTF-8' -> ('text/html', 'utf-8')."""
+    media, _, params = content_type.partition(";")
+    charset = None
+    for param in params.split(";"):
+        name, _, value = param.partition("=")
+        if name.strip().lower() == "charset":
+            charset = value.strip().strip("\"'").lower() or None
+    return media.strip().lower(), charset
+
+
+def _check_content_type(content_type):
+    media, _ = _media_type(content_type)
+    if not media:
+        # Guessing the type from the bytes ("sniffing") is a known source of security bugs.
+        raise FetchError("server did not say what kind of content this is")
+    if media not in ACCEPTED_TYPES:
+        raise FetchError(f"unsupported content type: {media}")
+
+
+BYTE_ORDER_MARKS = (
+    (codecs.BOM_UTF8, "utf-8"),
+    (codecs.BOM_UTF16_LE, "utf-16-le"),
+    (codecs.BOM_UTF16_BE, "utf-16-be"),
+)
+META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?([A-Za-z0-9_.:-]+)""", re.IGNORECASE)
+
+
+def _decode(body, content_type):
+    """Turn bytes into text: byte-order mark, then the header's charset, then an HTML <meta>, then UTF-8.
+
+    Never raises: unknown encodings fall back to UTF-8 and invalid bytes become U+FFFD.
+    """
+    for mark, encoding in BYTE_ORDER_MARKS:
+        if body.startswith(mark):
+            return body[len(mark):].decode(encoding, errors="replace"), encoding
+
+    media, charset = _media_type(content_type)
+    if charset is None and media != "text/plain":
+        match = META_CHARSET.search(body[:1024])  # Browsers only look this far for <meta charset>.
+        if match:
+            charset = match.group(1).decode("ascii").lower()
+
+    for label in (charset, DEFAULT_ENCODING):
+        if not label:
+            continue
+        try:
+            encoding = codecs.lookup(label).name
+        except LookupError:
+            continue  # An encoding name Python doesn't know.
+        if encoding in ("iso8859-1", "ascii"):  # Python's own names for latin-1 and ASCII labels.
+            # Browsers read these labels as windows-1252, which has curly quotes and dashes.
+            encoding = "cp1252"
+        try:
+            return body.decode(encoding, errors="replace"), encoding
+        except LookupError:
+            continue  # A codec that isn't a text encoding, such as "base64".
+    raise AssertionError("unreachable: UTF-8 always decodes")
 
 
 def _check_declared_size(response):
