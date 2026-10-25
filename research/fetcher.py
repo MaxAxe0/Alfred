@@ -1,7 +1,8 @@
 """Fetch one public web page for Alfred's future research service.
 
 R3a: URL checks, an explicit proxy, timeouts, and a size limit.
-Redirects are not followed yet (R3b) and content types are not checked yet (R3c).
+R3b: redirects are followed by hand, and every new address is checked first.
+Content types are not checked yet (R3c).
 
 The fetcher runs on the isolated network, where it cannot look up names.
 The proxy resolves names and refuses private addresses; this module checks the
@@ -27,6 +28,8 @@ MAX_BYTES = 2_000_000           # Counted after decompression.
 USER_AGENT = "Alfred-research/0.1 (+https://github.com/MaxAxe0/Alfred)"
 ACCEPT_ENCODING = "gzip, deflate"  # The only compression _read_limited can unpack.
 DEFAULT_PORTS = {"http": 80, "https": 443}
+MAX_REDIRECTS = 5
+REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
 
 class FetchError(Exception):
@@ -39,10 +42,11 @@ class FetchBlocked(FetchError):
 
 @dataclass(frozen=True)
 class FetchResult:
-    url: str
+    url: str               # Where the page actually came from, after any redirects.
     status: int
     content_type: str
     body: bytes
+    redirects: tuple = ()  # Earlier addresses that redirected, in order.
 
 
 def make_client(transport=None):
@@ -65,35 +69,35 @@ def make_client(transport=None):
 
 def fetch(url, client=None):
     """Fetch one page and return a FetchResult, or raise FetchError/FetchBlocked."""
-    # Check the URL before anything is sent. A refused URL never reaches the network.
-    try:
-        checked_host, checked_port = check_url(url)
-    except BlockedDestination as error:
-        raise FetchBlocked(str(error)) from None
-    # Let httpx read the URL now, so one it can't parse is refused before any connection.
-    try:
-        request_url = httpx.URL(url)
-    except httpx.InvalidURL as error:
-        raise FetchBlocked(f"invalid URL: {error}") from None
-    # Two parsers can disagree about tricky URLs. Only connect where net_policy approved.
-    if not _same_destination(checked_host, checked_port, request_url):
-        raise FetchBlocked("URL checker and HTTP library disagree about the destination")
+    request_url = _prepare(url)
 
     own_client = client is None
     if own_client:
         client = make_client()
-    deadline = time.monotonic() + TOTAL_TIMEOUT_SECONDS
+    deadline = time.monotonic() + TOTAL_TIMEOUT_SECONDS  # Covers every hop together.
+    redirects = []
     try:
-        with client.stream("GET", request_url) as response:
-            _check_status(response)
-            _check_declared_size(response)
-            body = _read_limited(response, deadline)
-            return FetchResult(
-                url=url,
-                status=response.status_code,
-                content_type=response.headers.get("content-type", ""),
-                body=body,
-            )
+        while True:
+            with client.stream("GET", request_url) as response:
+                next_url = _redirect_target(response, request_url)
+                if next_url is None:
+                    _check_status(response)
+                    _check_declared_size(response)
+                    body = _read_limited(response, deadline)
+                    return FetchResult(
+                        url=str(request_url),
+                        status=response.status_code,
+                        content_type=response.headers.get("content-type", ""),
+                        body=body,
+                        redirects=tuple(redirects),
+                    )
+            # A redirect. Its body is never read; the new address is checked before it is used.
+            if len(redirects) == MAX_REDIRECTS:
+                raise FetchError(f"more than {MAX_REDIRECTS} redirects")
+            if time.monotonic() > deadline:
+                raise FetchError(f"fetch took longer than {TOTAL_TIMEOUT_SECONDS:g} seconds")
+            redirects.append(str(request_url))
+            request_url = _prepare_redirect(next_url, request_url)
     except httpx.ProxyError as error:
         # An https:// tunnel the proxy refused (for example a private address).
         raise FetchBlocked(f"refused by proxy: {error}") from None
@@ -106,6 +110,49 @@ def fetch(url, client=None):
     finally:
         if own_client:
             client.close()
+
+
+def _prepare(url):
+    """Run every URL check and return the httpx URL to request. Refused URLs never reach the network."""
+    try:
+        checked_host, checked_port = check_url(url)
+    except BlockedDestination as error:
+        raise FetchBlocked(str(error)) from None
+    # Let httpx read the URL now, so one it can't parse is refused before any connection.
+    try:
+        request_url = httpx.URL(url)
+    except httpx.InvalidURL as error:
+        raise FetchBlocked(f"invalid URL: {error}") from None
+    # Two parsers can disagree about tricky URLs. Only connect where net_policy approved.
+    if not _same_destination(checked_host, checked_port, request_url):
+        raise FetchBlocked("URL checker and HTTP library disagree about the destination")
+    return request_url
+
+
+def _redirect_target(response, current_url):
+    """Return the absolute address a redirect points to, or None if this isn't a redirect."""
+    if response.status_code not in REDIRECT_STATUSES:
+        return None
+    location = response.headers.get("location")
+    if not location:
+        raise FetchError(f"redirect (HTTP {response.status_code}) without a destination")
+    try:
+        # Resolves relative destinations such as "/new" or "//other.example/" against the current page.
+        return str(current_url.join(location))
+    except httpx.InvalidURL as error:
+        raise FetchBlocked(f"invalid redirect destination: {error}") from None
+
+
+def _prepare_redirect(next_url, current_url):
+    """Check a redirect destination exactly like a first URL, plus refuse https -> http."""
+    try:
+        request_url = _prepare(next_url)
+    except FetchBlocked as error:
+        raise FetchBlocked(f"redirect to {next_url} refused: {error}") from None
+    # Dropping encryption would let anyone on the path alter the page, so refuse it.
+    if current_url.scheme == "https" and request_url.scheme == "http":
+        raise FetchBlocked(f"redirect from https to http refused: {next_url}")
+    return request_url
 
 
 def _same_destination(checked_host, checked_port, request_url):
@@ -127,8 +174,6 @@ def _check_status(response):
         # A plain http:// request the proxy refused. Smokescreen explains why in this header.
         reason = response.headers.get("x-smokescreen-error", "no reason given")
         raise FetchBlocked(f"refused by proxy: {reason}")
-    if 300 <= response.status_code < 400:
-        raise FetchError(f"redirect to {response.headers.get('location', '(none)')} not followed")
     if not 200 <= response.status_code < 300:
         raise FetchError(f"server answered HTTP {response.status_code}")
 

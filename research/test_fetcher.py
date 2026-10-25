@@ -36,6 +36,30 @@ def page(body=b"<p>hello</p>", status=200, **headers):
     return handler
 
 
+def site(pages):
+    """A fake website with several pages: {url: (status, headers)}. Records every URL contacted.
+
+    Pages not listed answer 404. Bodies are small HTML unless the headers say otherwise.
+    """
+    contacted = []
+
+    def handler(request):
+        url = str(request.url)
+        contacted.append(url)
+        status, headers = pages.get(url, (404, {}))
+        headers = dict(headers)  # A copy, so repeat visits see the same page.
+        body = headers.pop("_body", b"<p>page</p>")
+        return httpx.Response(status, stream=httpx.ByteStream(body),
+                              headers={"content-type": "text/html", **headers})
+
+    handler.contacted = contacted
+    return handler
+
+
+def moved(location, status=302):
+    return (status, {"location": location})
+
+
 class UrlCheckTests(unittest.TestCase):
     def test_refused_urls_never_reach_the_network(self):
         handler = page()
@@ -90,12 +114,6 @@ class ResponseTests(unittest.TestCase):
         fetch("https://example.com/", client=fake_site(handler))
         self.assertEqual(handler.seen[0].headers["user-agent"], fetcher.USER_AGENT)
 
-    def test_redirects_are_not_followed_yet(self):
-        handler = page(status=302, location="http://192.168.1.1/")
-        with self.assertRaisesRegex(FetchError, "not followed"):
-            fetch("https://example.com/", client=fake_site(handler))
-        self.assertEqual(len(handler.seen), 1)
-
     def test_server_error(self):
         with self.assertRaisesRegex(FetchError, "HTTP 500"):
             fetch("https://example.com/", client=fake_site(page(status=500)))
@@ -110,6 +128,114 @@ class ResponseTests(unittest.TestCase):
             raise httpx.ProxyError("407 Request Rejected by Proxy", request=request)
         with self.assertRaises(FetchBlocked):
             fetch("https://example.com/", client=fake_site(handler))
+
+
+class RedirectTests(unittest.TestCase):
+    def test_follows_a_redirect_to_a_public_page(self):
+        handler = site({
+            "https://example.com/old": moved("https://example.com/new", 301),
+            "https://example.com/new": (200, {}),
+        })
+        result = fetch("https://example.com/old", client=fake_site(handler))
+        self.assertEqual(result.url, "https://example.com/new")
+        self.assertEqual(result.redirects, ("https://example.com/old",))
+        self.assertEqual(handler.contacted, ["https://example.com/old", "https://example.com/new"])
+
+    def test_every_redirect_status_is_followed(self):
+        for status in (301, 302, 303, 307, 308):
+            with self.subTest(status=status):
+                handler = site({
+                    "https://example.com/a": moved("https://example.com/b", status),
+                    "https://example.com/b": (200, {}),
+                })
+                self.assertEqual(fetch("https://example.com/a", client=fake_site(handler)).status, 200)
+
+    def test_relative_destinations_are_resolved(self):
+        handler = site({
+            "https://example.com/a/b": moved("../c"),
+            "https://example.com/c": moved("//other.example/d"),
+            "https://other.example/d": (200, {}),
+        })
+        result = fetch("https://example.com/a/b", client=fake_site(handler))
+        self.assertEqual(result.url, "https://other.example/d")
+        self.assertEqual(len(result.redirects), 2)
+
+    def test_redirects_to_forbidden_places_are_never_contacted(self):
+        for location in (
+            "http://192.168.1.1/admin",          # router
+            "//192.168.1.1/",                    # same, written relative to the scheme
+            "https://localhost/",
+            "https://nas/",
+            "https://169.254.169.254/latest/",   # cloud metadata
+            "https://example.com:8080/",         # odd port: the gap the proxy leaves
+            "https://example.com\\@192.168.1.1/",
+            "ftp://example.com/",
+            "https://user:pw@example.com/",
+        ):
+            with self.subTest(location=location):
+                handler = site({"https://example.com/": moved(location)})
+                with self.assertRaisesRegex(FetchBlocked, "redirect"):
+                    fetch("https://example.com/", client=fake_site(handler))
+                self.assertEqual(handler.contacted, ["https://example.com/"])
+
+    def test_a_bad_hop_later_in_the_chain_is_refused(self):
+        handler = site({
+            "https://example.com/1": moved("https://example.com/2"),
+            "https://example.com/2": moved("http://192.168.1.1/"),
+        })
+        with self.assertRaises(FetchBlocked):
+            fetch("https://example.com/1", client=fake_site(handler))
+        self.assertNotIn("http://192.168.1.1/", handler.contacted)
+
+    def test_https_to_http_downgrade_refused(self):
+        handler = site({"https://example.com/": moved("http://example.com/")})
+        with self.assertRaisesRegex(FetchBlocked, "https to http"):
+            fetch("https://example.com/", client=fake_site(handler))
+        self.assertEqual(handler.contacted, ["https://example.com/"])
+
+    def test_http_to_https_upgrade_allowed(self):
+        handler = site({
+            "http://example.com/": moved("https://example.com/", 301),
+            "https://example.com/": (200, {}),
+        })
+        self.assertEqual(fetch("http://example.com/", client=fake_site(handler)).url, "https://example.com/")
+
+    def test_too_many_redirects(self):
+        handler = site({"https://example.com/loop": moved("https://example.com/loop")})
+        with self.assertRaisesRegex(FetchError, "more than 5 redirects"):
+            fetch("https://example.com/loop", client=fake_site(handler))
+        self.assertEqual(len(handler.contacted), 6)  # The first request plus 5 redirects.
+
+    def test_five_redirects_are_allowed(self):
+        pages = {f"https://example.com/{i}": moved(f"https://example.com/{i + 1}") for i in range(5)}
+        pages["https://example.com/5"] = (200, {})
+        result = fetch("https://example.com/0", client=fake_site(site(pages)))
+        self.assertEqual(len(result.redirects), 5)
+
+    def test_redirect_without_a_destination(self):
+        handler = site({"https://example.com/": (302, {})})
+        with self.assertRaisesRegex(FetchError, "without a destination"):
+            fetch("https://example.com/", client=fake_site(handler))
+
+    def test_redirect_page_body_is_not_downloaded(self):
+        # A redirect with a body far over the size limit: reading it would raise "larger than".
+        huge = b"x" * (fetcher.MAX_BYTES + 1)
+        handler = site({
+            "https://example.com/": (302, {"location": "/next", "_body": huge}),
+            "https://example.com/next": (200, {}),
+        })
+        self.assertEqual(fetch("https://example.com/", client=fake_site(handler)).status, 200)
+
+    def test_deadline_covers_the_whole_chain(self):
+        clock = itertools.count(0, 15)  # Each reading 15 s later: the second hop passes 20 s.
+        handler = site({
+            "https://example.com/a": moved("https://example.com/b"),
+            "https://example.com/b": moved("https://example.com/c"),
+            "https://example.com/c": (200, {}),
+        })
+        with mock.patch.object(fetcher.time, "monotonic", side_effect=lambda: next(clock)):
+            with self.assertRaisesRegex(FetchError, "longer than 20 seconds"):
+                fetch("https://example.com/a", client=fake_site(handler))
 
 
 class LimitTests(unittest.TestCase):
