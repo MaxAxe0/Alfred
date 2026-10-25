@@ -95,6 +95,21 @@ class UrlTests(unittest.TestCase):
                 with self.assertRaises(BlockedDestination):
                     check_url(url)
 
+    def test_backslashes_and_bad_hostname_characters_blocked(self):
+        for url in (
+            "https://example.com\\@192.168.1.1/",   # httpx reads this host as 192.168.1.1
+            "https://example.com\\.192.168.1.1/",
+            "https://example.com/path\\x",
+            "https://ex_ample.com/",
+            "https://example.com%40192.168.1.1/",
+            "https://-example.com/",
+            "https://example-.com/",
+            "https://example..com/",
+        ):
+            with self.subTest(url=url):
+                with self.assertRaises(BlockedDestination):
+                    check_url(url)
+
     def test_public_ip_literal_allowed(self):
         self.assertEqual(check_url("https://1.1.1.1/"), ("1.1.1.1", 443))
 

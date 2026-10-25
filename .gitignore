@@ -19,6 +19,9 @@ config.local.py
 *.pfx
 *.log
 
+# Claude Code's personal settings for this machine (permissions, local paths).
+.claude/settings.local.json
+
 # Keep Markdown notes local; publish only the root README.
 *.[mM][dD]
 !/README.md

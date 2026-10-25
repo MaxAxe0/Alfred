@@ -9,6 +9,7 @@ bugs and a compromised process can ignore them.
 """
 
 import ipaddress
+import re
 import socket
 from urllib.parse import urlsplit
 
@@ -23,6 +24,9 @@ BLOCKED_NAMES = {"localhost"}
 # Global unicast IPv6 lives in 2000::/3. Everything else (loopback, unique-local,
 # link-local, multicast, NAT64 64:ff9b::/96, IPv4-compatible ::/96) is refused.
 IPV6_GLOBAL_UNICAST = ipaddress.ip_network("2000::/3")
+
+# One DNS label: letters, digits, and hyphens, not starting or ending with a hyphen.
+HOSTNAME_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 
 
 class BlockedDestination(ValueError):
@@ -62,6 +66,10 @@ def check_url(url):
         raise BlockedDestination(f"URL is longer than {MAX_URL_LENGTH} characters")
     if any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in url):
         raise BlockedDestination("URL contains whitespace or control characters")
+    # Parsers disagree about backslashes (some treat them as "/"), which lets a URL
+    # look like one host to this check and another to the HTTP library.
+    if "\\" in url:
+        raise BlockedDestination("URL contains a backslash")
 
     try:
         parts = urlsplit(url)
@@ -99,6 +107,8 @@ def check_hostname(hostname):
         ascii_name = hostname.encode("idna").decode("ascii").lower()
     except UnicodeError:
         raise BlockedDestination("hostname is not a valid international domain name") from None
+    if not all(HOSTNAME_LABEL.fullmatch(label) for label in ascii_name.split(".")):
+        raise BlockedDestination(f"hostname contains characters not allowed in a hostname: {ascii_name}")
 
     if ascii_name in BLOCKED_NAMES or ascii_name.endswith(BLOCKED_NAME_SUFFIXES):
         raise BlockedDestination(f"local network name not allowed: {ascii_name}")

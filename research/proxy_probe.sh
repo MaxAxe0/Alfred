@@ -20,6 +20,9 @@ try() {  # label url [extra curl options]
         result="PROXY UNREACHABLE (curl exit $status) - test not run"
     elif [ "$1" = "407" ] || [ "$2" = "407" ]; then
         result="refused by proxy"
+    elif [ -n "$TRICK" ] && echo "$why" | grep -q "Failed to resolve"; then
+        # A trick name must resolve to its private address, or the trick wasn't tested.
+        result="NOT TESTED: name did not resolve (is the lookup service down?)"
     elif [ -n "$why" ]; then
         result="blocked by proxy:$why"
     else
@@ -53,10 +56,13 @@ try "IPv4-mapped IPv6"      "http://[::ffff:192.168.1.1]/"
 # (R2e), so these resolve to the private address and must be refused by the
 # proxy itself rather than hidden by a home router.
 echo "== DNS tricks =="
+TRICK=1
 try "name -> router"        "http://192.168.1.1.nip.io/"
 try "name -> loopback"      "http://127.0.0.1.nip.io/"
 try "name -> loopback 2"    "http://localtest.me/"
 try "name -> metadata"      "http://169.254.169.254.nip.io/"
+try "check: made-up name"   "http://no-such-name.invalid/"  # should say NOT TESTED
+TRICK=
 
 echo "== Known gap: ports are not restricted by the proxy =="
 try "public site, port 8080" "http://example.com:8080/"
