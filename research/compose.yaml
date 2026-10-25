@@ -1,21 +1,22 @@
-# R1: baseline network isolation test. Not part of Alfred; run by hand.
+# Alfred's web-research setup and its checks. Not part of Alfred's own image; run by hand.
 #
-# Two identical throwaway containers run the same probe script. The only
-# difference is the network:
-#   control  - an ordinary Docker network. Shows each target CAN be reached,
-#              so a failure on the isolated network actually means something.
-#   isolated - an internal network with no route out. Every target should fail.
+#   isolated network - no route out. The fetcher lives here.
+#   proxy            - the only way out: on "isolated" and on its own "egress" network.
+#                      Refuses private addresses (Smokescreen).
+#   fetcher          - fetches pages through the proxy; runs live_check.py.     (R3)
+#   proxy-probe      - checks the proxy directly with curl.                    (R2)
+#   control/isolated - the same network probe on an ordinary network and on    (R1)
+#                      the isolated one, to show the isolated one reaches nothing.
 #
 # Home-network addresses come from environment variables so they stay out of Git.
 # Run from the project folder (PowerShell):
 #   $env:ROUTER_IP = "192.168.1.1"; $env:PC_IP = "192.168.1.x"
-#   docker compose -f research/isolation-test.compose.yaml run --rm control
-#   docker compose -f research/isolation-test.compose.yaml run --rm isolated
-#   docker compose -f research/isolation-test.compose.yaml run --rm proxy-probe   (R2)
-#   docker compose -f research/isolation-test.compose.yaml run --rm fetcher       (R3d)
-#   docker compose -f research/isolation-test.compose.yaml down
+#   docker compose -f research/compose.yaml run --rm fetcher
+#   docker compose -f research/compose.yaml run --rm proxy-probe
+#   docker compose -f research/compose.yaml run --rm isolated     (or control)
+#   docker compose -f research/compose.yaml down                  (clean up afterwards)
 
-name: alfred-isolation-test
+name: alfred-research
 
 services:
   control:
@@ -41,7 +42,9 @@ services:
   # through it; it refuses private destinations (Smokescreen's default).
   proxy:
     image: alfred-smokescreen:v0.1.0
-    build: ./proxy
+    build:
+      context: .
+      dockerfile: proxy.Dockerfile
     # R3d: its outside leg has a network of its own, so nothing else can reach the proxy
     # from that side (R1's control container stays on "open").
     networks: [isolated, egress]
@@ -73,20 +76,6 @@ services:
       - --max-concurrent-requests=16
       - --max-request-rate=5
       - --max-request-burst=10
-
-  # R2: stands in for the research service. Lives only on the isolated network
-  # and is told to send web requests through the proxy. Arguments after the
-  # service name are passed to curl, e.g. `run --rm proxied https://example.com`.
-  proxied:
-    image: curlimages/curl:8.16.0
-    networks: [isolated]
-    cap_drop: [ALL]
-    environment:
-      # Lowercase: curl ignores uppercase HTTP_PROXY (a defence against "httpoxy").
-      http_proxy: http://proxy:4750
-      https_proxy: http://proxy:4750
-    depends_on: [proxy]
-    entrypoint: ["curl"]
 
   # R2: runs every allowed/refused check through the proxy.
   proxy-probe:

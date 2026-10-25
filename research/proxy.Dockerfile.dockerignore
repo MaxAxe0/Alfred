@@ -1,0 +1,2 @@
+# proxy.Dockerfile downloads Smokescreen's source itself; it needs no local files.
+**

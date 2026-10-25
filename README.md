@@ -79,7 +79,7 @@ Run image tests without network or private mounts:
 docker run --rm --network none alfred-app:local python -m unittest discover -s tests -v
 ```
 
-This migration does not implement public-web-only networking. The app still has normal outbound networking for Ollama and Gmail; isolated research and LAN blocking remain future work.
+Alfred's own container still has normal outbound networking for Ollama and Gmail. The isolated web-research setup is separate and not yet connected to Alfred; see [Web research (in progress)](#web-research-in-progress).
 
 ## Run
 
@@ -183,11 +183,20 @@ Each turn supports up to six sequential tool rounds. Tool activity and a waiting
 | `user_profile.py` | Validates private preferences and resolves the email alias |
 | `profile.example.json` | Blank public template for the ignored private profile |
 | `sandbox/` | Local test files; excluded from Git |
+| `research/` | Isolated web-research setup (in progress); see below |
 | `.gitignore` | Excludes environments, caches, sandbox data, and `.env` |
 
 ## Privacy and limitations
 
 Keep credentials, account-specific preferences, and private runtime data under the Git-ignored `.local/` folder, never in public source or `config.py`. Tests use synthetic data. Credential files are ordinary local files, not encrypted by Alfred. Ignore rules do not remove previously tracked files or prevent force-adding them; review staged changes before pushing. If a credential is published, revoke it first, then address the Git history.
+
+Before pushing, check what will be published and confirm private files are ignored:
+
+```powershell
+git status --short
+git diff --cached --stat
+git check-ignore .local/gmail/credentials.json .local/gmail/token.json
+```
 
 The configured model runs locally, without per-token API charges. File contents returned by tools become part of the conversation sent to local Ollama. History stays in Python memory and is lost when the program exits.
 
@@ -229,7 +238,7 @@ To configure your own Gmail account:
 4. Create a Desktop app OAuth client and download its JSON to `.local/gmail/credentials.json`. If offered an AI-agent designation, select it for Alfred.
 5. Run the host-side command `.\.venv\Scripts\python.exe gmail_auth.py`, sign in as the sending account, and review consent. The token is saved to `.local/gmail/token.json`.
 
-The authorization script does not send mail and is not exposed as a model tool. Keep credentials and tokens local, outside the sandbox. Google may require renewed consent; External apps in Testing with Gmail scopes have seven-day refresh-token expiry. See [Google's setup guide](https://developers.google.com/workspace/gmail/api/quickstart/python) and [token-expiry documentation](https://developers.google.com/identity/protocols/oauth2#expiration).
+The authorization script does not send mail and is not exposed as a model tool. Keep credentials and tokens local, outside the sandbox. If the token is malformed or the requested scope changes, delete only `.local/gmail/token.json` and run the authorization again; keep the downloaded client file. To switch accounts, revoke the old authorization in your Google account, delete the token, and sign in again. Google may require renewed consent; External apps in Testing with Gmail scopes have seven-day refresh-token expiry. See [Google's setup guide](https://developers.google.com/workspace/gmail/api/quickstart/python) and [token-expiry documentation](https://developers.google.com/identity/protocols/oauth2#expiration).
 
 Standalone plain-text sending is available with mandatory terminal approval:
 
@@ -238,6 +247,30 @@ Standalone plain-text sending is available with mandatory terminal approval:
 ```
 
 Enter one recipient, subject, and a one-line body. Review the exact preview; only `yes` sends. The sender is the Gmail account authorized during setup. It supports no attachments, Cc, or Bcc. `MAX_EMAIL_BODY_CHARS` in `config.py` limits the body (default 10,000). Gmail acceptance is not proof of inbox delivery. If the outcome is uncertain, inspect the sender's Sent folder before retrying. The assistant also offers `send_email_with_approval` as a model tool. Restart Alfred and ask, for example: `Send an email to recipient@example.com with subject Alfred test and body Hello from Alfred.` Replace that example address with your intended recipient. The model proposes the fields; Python validates and previews them and requires terminal approval. At most one email proposal is allowed per user turn, preventing model-driven retries within that turn. If a send is uncertain, check Sent before requesting another attempt. Credentials stay in the Git-ignored `.local/gmail/` folder.
+
+## Web research (in progress)
+
+The goal is for Alfred to search the web, read sources, and cite them, without the research code being able to reach the home network. The `research/` folder contains the groundwork. **It is not connected to Alfred yet.**
+
+- **Sealed network:** the research container runs on a Docker network with no route out. Docker's ordinary networks can reach the local network, so this is enforced at the network level.
+- **One guarded exit:** a [Smokescreen](https://github.com/stripe/smokescreen) proxy, built from source, is the only way out. It looks up each destination itself and refuses private, loopback, and cloud-metadata addresses, including public names that point at them. It uses public DNS and is rate-limited.
+- **Safe fetcher (`research/fetcher.py`):** checks every URL and every redirect before contacting it (schemes, ports 80/443, local names, URL parsing tricks), refuses https-to-http downgrades, accepts only text pages, and enforces time and size limits, including against compression bombs.
+
+Unit tests use fake websites and make no network requests:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s research -v
+```
+
+Live checks run the fetcher in Docker through the real proxy. Set your router and PC addresses first (they are only used by the probes and stay out of Git):
+
+```powershell
+$env:ROUTER_IP = "192.168.1.1"; $env:PC_IP = "192.168.1.x"
+docker compose -f research/compose.yaml run --rm fetcher
+docker compose -f research/compose.yaml down
+```
+
+Next steps: turning pages into readable text, self-hosted search, a `/search` command, and citations.
 
 ## Future direction
 
