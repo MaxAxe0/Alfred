@@ -1,6 +1,6 @@
 # Alfred
 
-A local AI assistant built as a hands-on learning project. Alfred uses Python and a model running through Ollama to chat, list sandbox files, and read text files.
+A local AI assistant built as a hands-on learning project. Alfred uses Python and a model running through Ollama to chat, read and create text files in a sandbox folder, and send plain-text email, with every file creation and email approved by you in the terminal.
 
 The goal is to understand how an assistant works: conversation history, tool calling, permissions, and eventually communication between a dedicated AI host and a lightweight PC service.
 
@@ -12,7 +12,7 @@ The goal is to understand how an assistant works: conversation history, tool cal
 - List files directly inside a designated `sandbox` folder.
 - Read UTF-8 text files directly inside that folder, up to 10,000 bytes per file.
 - Create new sandbox `.txt` files after an exact preview and terminal approval; existing files are never overwritten. Creation is limited to 10,000 characters per file.
-- Reject read requests whose resolved paths are outside the sandbox or inside subfolders.
+- Reject file names that are not plain names (no folders, slashes, or colons) before touching the filesystem, and any resolved path outside the sandbox.
 
 The model requests tools; Python decides which function to execute and returns the result to the model.
 
@@ -154,6 +154,7 @@ Edit `config.py` to change shared settings, then restart Alfred. `assistant.py` 
 | `REQUEST_TIMEOUT_SECONDS` | `120.0` | Network inactivity timeout for model requests; not a total task deadline |
 | `MAX_READ_BYTES` | `10_000` | Maximum bytes read from one file |
 | `MAX_WRITE_CHARS` | `10_000` | Maximum characters in a proposed new file |
+| `MAX_EMAIL_BODY_CHARS` | `10_000` | Maximum characters in a proposed email body |
 
 Use positive integers for the numeric limits. Bytes and characters are different units: a Unicode character may use multiple UTF-8 bytes. Large settings can increase resource use, and these per-file limits do not enforce an overall conversation budget.
 
@@ -178,13 +179,20 @@ Each turn supports up to six sequential tool rounds. Tool activity and a waiting
 | --- | --- |
 | `assistant.py` | Interactive conversation and tool dispatch |
 | `tools.py` | Sandbox file listing, reading, and approved creation |
-| `config.py` | Shared model settings and file limits |
+| `gmail_auth.py` | One-time, send-only Gmail sign-in run on the host; never sends mail |
+| `gmail_tools.py` | Email validation, exact preview, terminal approval, and sending |
+| `config.py` | Shared model settings and limits |
 | `system_prompt.txt` | Public identity and operating instructions |
 | `user_profile.py` | Validates private preferences and resolves the email alias |
 | `profile.example.json` | Blank public template for the ignored private profile |
+| `tests/` | Automated checks with temporary folders and mocked Ollama and Gmail |
+| `requirements.txt` | Pinned Python package versions |
+| `Dockerfile`, `compose.yaml`, `.dockerignore` | Alfred's container image, runtime settings, and build allowlist |
 | `sandbox/` | Local test files; excluded from Git |
 | `web_research/` | Isolated web-research setup (in progress); see below |
-| `.gitignore` | Excludes environments, caches, sandbox data, and `.env` |
+| `.gitignore` | Keeps environments, caches, sandbox data, credentials, private notes, and logs out of Git |
+| `.gitattributes` | Keeps shell scripts in Linux line-ending format for containers |
+| `LICENSE` | MIT license |
 
 ## Privacy and limitations
 
@@ -226,9 +234,9 @@ From the project folder:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-These checks use temporary folders rather than your sandbox and do not contact Ollama. They cover missing sandbox folders, file listing, invalid and outside paths, read-size boundaries, and recovery from simulated model-request failures and keyboard interruption.
+These checks use temporary folders rather than your sandbox and do not contact Ollama or Gmail. They cover missing sandbox folders, file listing, invalid, network-style, and outside paths, read-size boundaries, approvals that must be typed exactly, no overwriting, email header and look-alike address rejection, private-profile validation, and recovery from simulated model-request failures and keyboard interruption. The web-research tests are run separately; see [Web research (in progress)](#web-research-in-progress).
 
-## Gmail integration in progress
+## Gmail setup and sending
 
 To configure your own Gmail account:
 

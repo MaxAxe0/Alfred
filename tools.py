@@ -3,6 +3,19 @@ from pathlib import Path
 import config
 
 
+def filename_error(filename: str) -> str | None:
+    """Return an error unless filename is a plain name, checked before any filesystem call.
+
+    Slashes are refused first: on Windows, resolving a name like //server/share/x
+    contacts that computer (and may send a login attempt) before any path check runs.
+    """
+    if ":" in filename:
+        return "Error: filename cannot contain a colon."
+    if "/" in filename or "\\" in filename or filename in ("", ".", ".."):
+        return "Error: use a plain file name, directly inside the sandbox."
+    return None
+
+
 def list_files() -> list[str] | str:
     """List sandbox filenames, or return an error if the folder is unavailable."""
     folder = Path(__file__).parent / "sandbox"
@@ -17,8 +30,9 @@ def list_files() -> list[str] | str:
 
 def read_file(filename: str) -> str:
     """Read a sandbox UTF-8 text file within the configured byte limit."""
-    if ":" in filename:
-        return "Error: filename cannot contain a colon."
+    error = filename_error(filename)
+    if error:
+        return error
 
     try:
         folder = (Path(__file__).parent / "sandbox").resolve()
@@ -46,8 +60,9 @@ def read_file(filename: str) -> str:
     
 def create_file(filename: str, content: str) -> str:
     """Create a new UTF-8 .txt file directly inside the sandbox."""
-    if ":" in filename:
-        return "Error: filename cannot contain a colon."
+    error = filename_error(filename)
+    if error:
+        return error
 
     if len(content) > config.MAX_WRITE_CHARS:
         return f"Error: content exceeds the {config.MAX_WRITE_CHARS:,}-character limit."
@@ -80,8 +95,11 @@ def create_file_with_approval(filename: str, content: str) -> str:
         return "Error: filename and content must be strings."
 
     # Validate the proposal before asking for approval.
-    if ":" in filename or len(content) > config.MAX_WRITE_CHARS:
-        return f"Error: invalid filename or content exceeds {config.MAX_WRITE_CHARS:,} characters."
+    error = filename_error(filename)
+    if error:
+        return error
+    if len(content) > config.MAX_WRITE_CHARS:
+        return f"Error: content exceeds the {config.MAX_WRITE_CHARS:,}-character limit."
 
     try:
         folder = (Path(__file__).parent / "sandbox").resolve()

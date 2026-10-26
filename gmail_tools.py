@@ -25,6 +25,10 @@ def send_email_with_approval(recipient: str, subject: str, body: str) -> str:
         return f"Error: body must contain 1 to {config.MAX_EMAIL_BODY_CHARS:,} characters."
     if any(ord(char) < 32 or ord(char) == 127 for char in recipient + subject):
         return "Error: recipient and subject cannot contain control characters."
+    # Quoted names are legal but let an address look like another one:
+    # "a@b.com"@evil.example is delivered to evil.example.
+    if '"' in recipient or "\\" in recipient:
+        return "Error: recipient cannot contain quotes or backslashes."
 
     try:
         address = Address(addr_spec=recipient)

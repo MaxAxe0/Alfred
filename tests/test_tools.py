@@ -35,6 +35,26 @@ class FileToolTests(unittest.TestCase):
             with self.subTest(filename=filename):
                 self.assertTrue(tools.read_file(filename).startswith("Error:"))
 
+    def test_network_and_folder_names_refused_before_touching_the_filesystem(self):
+        # On Windows, resolving //server/share/x contacts that computer. If resolve() is
+        # called at all, this test fails, proving the refusal happens first.
+        names = ("//192.0.2.1/share/x.txt", "\\\\192.0.2.1\\share\\x.txt", "folder/x.txt",
+                 "folder\\x.txt", "", ".", "..")
+        with patch.object(tools.Path, "resolve", side_effect=AssertionError("filesystem touched")):
+            for name in names:
+                with self.subTest(name=name):
+                    self.assertTrue(tools.read_file(name).startswith("Error:"))
+                    self.assertTrue(tools.create_file(name, "Text").startswith("Error:"))
+                    with patch("builtins.input") as approval:
+                        self.assertTrue(tools.create_file_with_approval(name, "Text").startswith("Error:"))
+                        approval.assert_not_called()
+
+    def test_plain_names_still_work(self):
+        (self.sandbox / "my notes.txt").write_text("Hi", encoding="utf-8")
+        self.assertEqual(tools.read_file("my notes.txt"), "Hi")
+        with patch("builtins.input", return_value="yes"):
+            self.assertEqual(tools.create_file_with_approval("Summary-2026.txt", "x"), "Created Summary-2026.txt.")
+
     def test_read_enforces_byte_limit(self):
         with patch.object(config, "MAX_READ_BYTES", 4):
             target = self.sandbox / "note.txt"

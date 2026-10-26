@@ -48,6 +48,31 @@ class GmailSendTests(unittest.TestCase):
                 approval.assert_not_called()
         self.authorize.assert_not_called()
 
+    def test_control_characters_the_email_library_allows_are_still_rejected(self):
+        # The email library already refuses line breaks in headers; these get past it,
+        # so only gmail_tools' own control-character check stops them.
+        for char in ("\x00", "\x07", "\x1b", "\x7f"):
+            for recipient, subject in ((f"a{char}@example.com", "Subject"), ("a@example.com", f"Sub{char}ject")):
+                with self.subTest(char=repr(char), field="recipient" if char in recipient else "subject"), \
+                     patch("builtins.input") as approval:
+                    result = gmail_tools.send_email_with_approval(recipient, subject, "Body")
+                    self.assertIn("control characters", result)
+                    approval.assert_not_called()
+        self.authorize.assert_not_called()
+
+    def test_look_alike_quoted_addresses_are_rejected(self):
+        for recipient in ('"a@b.com"@evil.example', '"friend"@example.com', 'a\\@b.com@evil.example'):
+            with self.subTest(recipient=recipient), patch("builtins.input") as approval:
+                result = gmail_tools.send_email_with_approval(recipient, "Subject", "Body")
+                self.assertIn("quotes or backslashes", result)
+                approval.assert_not_called()
+        self.authorize.assert_not_called()
+
+    def test_ordinary_addresses_still_reach_the_preview(self):
+        for recipient in ("friend@example.com", "first.last+tag@sub.example.co.uk", "o'brien@example.com"):
+            with self.subTest(recipient=recipient), patch("builtins.input", return_value="no"):
+                self.assertTrue(gmail_tools.send_email_with_approval(recipient, "Subject", "Body").startswith("Cancelled:"))
+
     def test_approval_sends_exact_message_once_without_retry(self):
         with patch("builtins.input", return_value="yes"):
             result = gmail_tools.send_email_with_approval("recipient@example.com", "My subject", "Hello\nWorld")
