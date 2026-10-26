@@ -1,8 +1,14 @@
 # Alfred
 
-A local AI assistant built as a hands-on learning project. Alfred uses Python and a model running through Ollama to chat, read and create text files in a sandbox folder, and send plain-text email, with every file creation and email approved by you in the terminal.
+> **Work in progress.** Alfred is an early prototype under active development. Many features described below as the vision are not built yet; see [Current features](#current-features) for what works today.
 
-The goal is to understand how an assistant works: conversation history, tool calling, permissions, and eventually communication between a dedicated AI host and a lightweight PC service.
+Alfred is a personal AI assistant that runs on your own hardware. It is local-first and private by default, with no per-use AI charges. The long-term goal is an assistant you can reach from anywhere (by text message, a desktop app, a voice call, or a live video session showing your screen) that carries out real tasks on your computer: opening apps, finding files, emailing them to you, or pushing work to GitHub. It will always ask before doing anything consequential.
+
+Alfred is also meant to be modular and open source. The plan is an extension system so anyone can add tools and shape Alfred around their own tasks and preferences, with the core, not the extensions, enforcing permissions and approvals. Eventually Alfred will run full time on a dedicated machine, with a lightweight service on the PC carrying out approved actions.
+
+It is also a hands-on learning project: each capability is built in small, tested steps, with safety enforced in code rather than trusted to the AI model.
+
+**Today**, Alfred uses Python and a model running through Ollama to chat, read and create text files in a sandbox folder, and send plain-text email, with every file creation and email approved by you in the terminal. An isolated web-research setup is being built separately.
 
 ## Current features
 
