@@ -10,6 +10,7 @@ It is also a hands-on learning project: each capability is built in small, teste
 
 **Today**, Alfred uses Python and a model running through Ollama to chat, read and create text files in a sandbox folder, and send plain-text email, with every file creation and email approved by you in the terminal. An isolated web-research setup is being built separately.
 
+
 ## Current features
 
 - Chat with a local `qwen3.5:9b` model.
