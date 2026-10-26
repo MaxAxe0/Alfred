@@ -183,7 +183,7 @@ Each turn supports up to six sequential tool rounds. Tool activity and a waiting
 | `user_profile.py` | Validates private preferences and resolves the email alias |
 | `profile.example.json` | Blank public template for the ignored private profile |
 | `sandbox/` | Local test files; excluded from Git |
-| `research/` | Isolated web-research setup (in progress); see below |
+| `web_research/` | Isolated web-research setup (in progress); see below |
 | `.gitignore` | Excludes environments, caches, sandbox data, and `.env` |
 
 ## Privacy and limitations
@@ -250,24 +250,24 @@ Enter one recipient, subject, and a one-line body. Review the exact preview; onl
 
 ## Web research (in progress)
 
-The goal is for Alfred to search the web, read sources, and cite them, without the research code being able to reach the home network. The `research/` folder contains the groundwork. **It is not connected to Alfred yet.**
+The goal is for Alfred to search the web, read sources, and cite them, without the research code being able to reach the home network. The `web_research/` folder contains the groundwork. **It is not connected to Alfred yet.**
 
 - **Sealed network:** the research container runs on a Docker network with no route out. Docker's ordinary networks can reach the local network, so this is enforced at the network level.
 - **One guarded exit:** a [Smokescreen](https://github.com/stripe/smokescreen) proxy, built from source, is the only way out. It looks up each destination itself and refuses private, loopback, and cloud-metadata addresses, including public names that point at them. It uses public DNS and is rate-limited.
-- **Safe fetcher (`research/fetcher.py`):** checks every URL and every redirect before contacting it (schemes, ports 80/443, local names, URL parsing tricks), refuses https-to-http downgrades, accepts only text pages, and enforces time and size limits, including against compression bombs.
+- **Safe fetcher (`web_research/fetcher.py`):** checks every URL and every redirect before contacting it (schemes, ports 80/443, local names, URL parsing tricks), refuses https-to-http downgrades, accepts only text pages, and enforces time and size limits, including against compression bombs.
 
 Unit tests use fake websites and make no network requests:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s research -v
+.\.venv\Scripts\python.exe -m unittest discover -s web_research/tests -t web_research -v
 ```
 
 Live checks run the fetcher in Docker through the real proxy. Set your router and PC addresses first (they are only used by the probes and stay out of Git):
 
 ```powershell
 $env:ROUTER_IP = "192.168.1.1"; $env:PC_IP = "192.168.1.x"
-docker compose -f research/compose.yaml run --rm fetcher
-docker compose -f research/compose.yaml down
+docker compose -f web_research/compose.yaml run --rm fetcher
+docker compose -f web_research/compose.yaml down
 ```
 
 Next steps: turning pages into readable text, self-hosted search, a `/search` command, and citations.

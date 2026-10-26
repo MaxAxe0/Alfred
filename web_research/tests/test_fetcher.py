@@ -1,4 +1,4 @@
-"""Run from the project folder: python -m unittest discover -s research -v
+"""Run from the project folder: python -m unittest discover -s web_research/tests -t web_research -v
 
 These checks make no network connections. Each test builds a fake website
 (httpx.MockTransport) that answers however the test needs.

@@ -1,4 +1,4 @@
-"""Run from the project folder: python -m unittest discover -s research -v
+"""Run from the project folder: python -m unittest discover -s web_research/tests -t web_research -v
 
 These checks make no network connections; DNS is replaced by a fake resolver.
 """

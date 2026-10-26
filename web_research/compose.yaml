@@ -11,12 +11,12 @@
 # Home-network addresses come from environment variables so they stay out of Git.
 # Run from the project folder (PowerShell):
 #   $env:ROUTER_IP = "192.168.1.1"; $env:PC_IP = "192.168.1.x"
-#   docker compose -f research/compose.yaml run --rm fetcher
-#   docker compose -f research/compose.yaml run --rm proxy-probe
-#   docker compose -f research/compose.yaml run --rm isolated     (or control)
-#   docker compose -f research/compose.yaml down                  (clean up afterwards)
+#   docker compose -f web_research/compose.yaml run --rm fetcher
+#   docker compose -f web_research/compose.yaml run --rm proxy-probe
+#   docker compose -f web_research/compose.yaml run --rm isolated     (or control)
+#   docker compose -f web_research/compose.yaml down                  (clean up afterwards)
 
-name: alfred-research
+name: alfred-web-research
 
 services:
   control:
@@ -94,7 +94,7 @@ services:
 
   # R3d: the research fetcher, running live checks through the proxy.
   fetcher:
-    image: alfred-research-fetcher:r3d
+    image: alfred-web-research-fetcher:r3d
     build:
       context: .
       dockerfile: fetcher.Dockerfile

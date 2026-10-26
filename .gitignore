@@ -25,3 +25,6 @@ config.local.py
 # Keep Markdown notes local; publish only the root README.
 *.[mM][dD]
 !/README.md
+
+# Private plan, notes, and archive: never published, whatever file type is added.
+notes/

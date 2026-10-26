@@ -1,7 +1,7 @@
 """R3d live check: real fetches through the real proxy, from the isolated network.
 
 Run inside the fetcher container, from the project folder:
-    docker compose -f research/compose.yaml run --rm fetcher
+    docker compose -f web_research/compose.yaml run --rm fetcher
 
 Each check prints PASS, FAIL, or NOT TESTED. NOT TESTED means an outside
 service the check depends on (httpbin.org, nip.io) didn't cooperate, so the
